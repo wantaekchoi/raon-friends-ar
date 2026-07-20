@@ -3,6 +3,16 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
 const BASE = import.meta.env.BASE_URL;
 
+// fbx는 텍스처 경로를 "제작 PC의 절대경로"로 구워두는 일이 흔하다(raoni.fbx =
+// `C:\Users\Administrator\raoni_texture-01.jpg`). FBXLoader는 그걸 모델 디렉토리 기준
+// 상대경로로 이어붙여 요청하므로 배포본에서 항상 404가 난다(파일명만 남겨도 그 이름으로는
+// 배포한 적이 없어 여전히 404다). 그래서 우리가 실제로 배포한 그 캐릭터의 텍스처로 돌린다 —
+// 요청이 사라지고, 어차피 아래 머티리얼 규칙이 입히려던 것과 같은 이미지다.
+export function rewriteBakedTexturePath(url, shippedTextureUrl) {
+  const isAbsoluteOsPath = /(^|\/)[A-Za-z]:[\\/]/.test(url) || url.includes('\\');
+  return isAbsoluteOsPath && shippedTextureUrl ? shippedTextureUrl : url;
+}
+
 // 캐릭터별 fbx·텍스처 매핑. pickTexture(name)은 메시/머티리얼 이름으로 어떤 텍스처를
 // 매칭할지 결정한다 (라옹은 얼굴/주사기 2장을 이름 패턴으로 구분, 라오니·라오나는 단일 텍스처).
 const CHARACTER_ASSETS = {
@@ -61,7 +71,13 @@ export async function loadCharacter(key) {
   }
 
   try {
-    const fbx = await new FBXLoader().loadAsync(`${BASE}models/${assets.model}`);
+    // fbx에 구워진 제작 PC 절대경로(예: raoni.fbx의 C:\Users\Administrator\raoni_texture-01.jpg)를
+    // FBXLoader가 그대로 요청해 매번 404를 낸다 — 아래 머티리얼 규칙이 결과적으로 외부 텍스처로
+    // 교체해 화면은 정상이지만, 요청 자체를 없애 프로덕션 콘솔 에러를 남기지 않는다.
+    const manager = new THREE.LoadingManager();
+    const shippedTexture = `${BASE}models/${Object.values(assets.textures)[0]}`;
+    manager.setURLModifier((url) => rewriteBakedTexturePath(url, shippedTexture));
+    const fbx = await new FBXLoader(manager).loadAsync(`${BASE}models/${assets.model}`);
 
     const texLoader = new THREE.TextureLoader();
     const textures = {};
