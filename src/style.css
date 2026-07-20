@@ -308,6 +308,14 @@ body.no-camera #screen-ar { background: linear-gradient(180deg, #2b1a3a, #6b3f8f
   background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.85rem; font-weight: 600;
 }
 
+/* 카드 하이브리드 플로우: 소환 후에도 마커 세션(카드 부착 렌더링)을 배경으로 유지하고
+   #screen-ar는 가이드·설문 UI만 얹는다 — overlay 전용 카메라 요소는 마커 뷰를 가리므로 숨김.
+   기념사진은 overlay의 video/canvas를 합성하므로 마커 플로우에선 비활성, 🏠은 marker 쪽 버튼 사용. */
+body.marker-flow #camera-video,
+body.marker-flow #three-canvas,
+body.marker-flow #btn-capture,
+body.marker-flow #btn-home { display: none; }
+
 /* --- Vision AI 인식 모드 (1단계: 구조 + mock, 2단계에서 MediaPipe 실 모델로 교체 예정) ---
    #screen-marker와 동일한 패턴: data-screen 상태머신과 무관하게 main.js가 style.display를
    직접 토글한다. 인식 성공 시엔 이 화면을 숨기고 오버레이 모드로 넘어가므로(marker와 달리

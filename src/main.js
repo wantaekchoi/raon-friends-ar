@@ -412,6 +412,18 @@ async function startOverlayFlow() {
 
 document.getElementById('btn-overlay').addEventListener('click', startOverlayFlow);
 
+// 카드 하이브리드 플로우 — 마커 세션(캐릭터는 카드에 부착)을 살려둔 채 가이드·설문 UI(#screen-ar)만
+// 그 위에 얹는다. overlay 전용 요소(카메라 비디오·캔버스·기념사진)는 body.marker-flow CSS로 숨긴다.
+// activeScene은 null 유지 — ensureCharacter/모션 호출은 기존 null 가드로 자연스럽게 생략된다.
+function startMarkerFlow(key) {
+  history.pushState({ ar: true }, ''); // 하드웨어 뒤로가기 → 홈 (오버레이 플로우와 동일)
+  document.body.classList.add('marker-flow');
+  flow = createFlow(lockGuideScriptToCharacter(CONFIG.guideScript, key, CONFIG.characters));
+  flow.start();
+  syncScreen();
+  renderGuide();
+}
+
 // 🏠 홈 — AR/마커 어디서든 처음 화면으로. 카메라·세션을 정리하는 가장 안전한 방법은 reload.
 function goHome() {
   try { activeScene?.stopCamera?.(); markerSession?.stop(); } catch { /* 정리 실패해도 리로드는 진행 */ }
@@ -552,21 +564,32 @@ async function enterMarkerMode() {
     markerSession = await initMarker({
       containerEl: document.getElementById('marker-container'),
       onTarget(key) {
-        if (found) return; // 첫 인식 카드가 소환 확정 — 이후 다른 카드·트래킹 소실은 무시
+        if (found) return; // 첫 인식 카드가 소환 확정 — 이후 다른 카드 인식은 무시
         found = true;
         clearTimeout(fallbackTimer);
         fallbackBtn.hidden = true;
-        // 소환 연출: 카드 위 등장을 잠깐 보여주고 → 오버레이 모드로 캐릭터를 데려가 계속 진행.
-        // (실시간 트래킹에 캐릭터가 나왔다 사라졌다 하지 않도록 — 실기기 피드백 2026-07-20)
+        // 소환 확정: 마커 세션을 유지한 채 진행한다 — 카드가 보이면 캐릭터가 카드에 딱 붙고(6DoF),
+        // 놓치면 화면에 남았다가 재인식 시 다시 붙는다(marker.js confirmSummon). 오버레이(3DoF)로
+        // 넘기던 이전 방식은 부착감을 잃어 폐기 (부착감 계획 Task A, 실기기 피드백 2026-07-20).
         hint.hidden = false;
         hint.textContent = CONFIG.ui.markerSummoned.replace('{name}', CONFIG.characters[key].name);
         sound.play('twinkle');
+        markerSession?.confirmSummon(key);
         setTimeout(() => {
-          markerSession?.stop();
-          document.getElementById('screen-marker').style.display = 'none';
-          flow = createFlow(lockGuideScriptToCharacter(CONFIG.guideScript, key, CONFIG.characters));
-          startOverlayFlow();
+          hint.hidden = true;
+          startMarkerFlow(key);
         }, 1600);
+      },
+      // 소환 확정 후 트래킹 상태 전환 알림 — 카드를 놓치면 재부착 방법 힌트를 잠깐 보여준다
+      onHoldChange(tracked) {
+        if (!found) return;
+        if (tracked) {
+          hint.hidden = true;
+        } else {
+          hint.textContent = CONFIG.ui.markerLostHint;
+          hint.hidden = false;
+          setTimeout(() => { hint.hidden = true; }, 3000);
+        }
       },
     });
   } catch (err) {
@@ -784,6 +807,7 @@ document.getElementById('btn-capture').addEventListener('click', async () => {
 
 document.getElementById('btn-restart').addEventListener('click', () => {
   activeScene?.stopCamera?.(); // 리셋 직전 카메라 스트림 해제
+  markerSession?.stop(); // 마커 플로우로 완주한 경우의 카메라 해제 (goHome과 동일)
   location.reload();
 });
 document.getElementById('btn-error-restart').addEventListener('click', () => {
