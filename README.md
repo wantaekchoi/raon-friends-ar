@@ -166,11 +166,11 @@ npm run dev
 npm run build     # 프로덕션 빌드 (dist/)
 npm run preview   # 빌드 결과 로컬 미리보기
 npm test          # Vitest 실행
-npm run e2e       # E2E 시나리오 11종 (빌드 → preview 기동 → headless Chrome, fake 카메라)
+npm run e2e       # E2E 시나리오 12종 (빌드 → preview 기동 → headless Chrome, fake 카메라)
 ```
 
 <details>
-<summary>E2E 시나리오 11종 (S0~S10) — 각각 무엇을 검증하는지</summary>
+<summary>E2E 시나리오 12종 (S0~S11) — 각각 무엇을 검증하는지</summary>
 
 | # | 이름 | 검증 내용 |
 |---|---|---|
@@ -185,6 +185,7 @@ npm run e2e       # E2E 시나리오 11종 (빌드 → preview 기동 → headle
 | S8 | **카드 소환 성공 경로(markerMock)** | 카드 인식 "성공" 이후 실제 코드 경로(정체성 고정 · 오버레이 전용 UI 숨김 · 가이드 완주 → 설문)를 헤드리스로 검증하는 유일한 시나리오. S4는 미인식(폴백) 경로만 지나가서, 소환 성공 경로는 v1.4.0 셸 재작성 전까지 커버리지 사각지대였음 |
 | S9 | **전역 에러 화면** | 미처리 예외 발생 시 `#error-screen`이 뜨고 문구·[다시 시작] 버튼·구글폼 폴백 링크가 노출되며, 재시작 시 처음 화면으로 복귀하는지 |
 | S10 | **키오스크 자동 리셋** | `?kiosk=1`에서 무입력 상태로 리셋 대기시간이 지나면 자동 `location.reload()`로 처음 화면에 복귀하는지 |
+| S11 | **오프라인 큐 다건 누적 + 리로드 후 자동 플러시** | 오프라인 방문객 2명이 연달아 완주해 큐 2건 누적 → 리로드만으로는 유실·중복 없이 그대로인지 → 네트워크 복구 후 리로드 시 부팅 시점 자동 flush로 큐가 비워지는지. (참고: 네트워크만 복구하고 리로드하지 않으면 자동으로 비워지지 않는다 — 부팅 시 1회 실행되는 flush가 유일한 자동 트리거이고 `online` 이벤트 등 별도 트리거는 없음, 코드 확인 결과) |
 
 </details>
 
@@ -268,7 +269,7 @@ raon-friends-ar/
 │   ├── e2e.mjs                  # E2E 러너 (npm run e2e)
 │   ├── e2e/
 │   │   ├── harness.mjs          # puppeteer-core 하네스 (fake 카메라 headless Chrome)
-│   │   └── scenarios/           # S0~S10 11종 — 위 [로컬 실행](#-로컬-실행) 절 표 참고
+│   │   └── scenarios/           # S0~S11 12종 — 위 [로컬 실행](#-로컬-실행) 절 표 참고
 │   └── export-usdz.mjs          # AR Quick Look용 .usdz 헤드리스 변환
 ├── docs/                       # 설계서·상태 문서·ADR·카드 PDF·QR
 └── .github/workflows/deploy.yml # main push → npm ci → test → build → e2e 게이트 → Pages 배포

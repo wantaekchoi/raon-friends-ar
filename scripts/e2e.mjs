@@ -15,6 +15,7 @@ const scenarioModules = [
   './e2e/scenarios/s8-marker-summon.mjs',
   './e2e/scenarios/s9-error-screen.mjs',
   './e2e/scenarios/s10-kiosk-reset.mjs',
+  './e2e/scenarios/s11-offline-queue-multi.mjs',
 ];
 
 execSync('npm run build', { stdio: 'inherit' });
