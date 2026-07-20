@@ -161,6 +161,7 @@ npm run dev
 npm run build     # 프로덕션 빌드 (dist/)
 npm run preview   # 빌드 결과 로컬 미리보기
 npm test          # Vitest 실행
+npm run e2e       # E2E 시나리오 8종 (빌드 → preview 기동 → headless Chrome, fake 카메라)
 ```
 
 ### 배포 방법
@@ -199,9 +200,9 @@ export const CONFIG = {
 raon-friends-ar/
 ├── index.html                  # 메인 앱
 ├── dashboard.html              # 부스 대시보드 (별도 빌드 엔트리)
-├── vite.config.js              # base 경로 + 멀티 엔트리 + three shim
+├── vite.config.js              # base 경로 + 멀티 엔트리 + three shim + dedupe
 ├── src/
-│   ├── main.js                 # 진입점 — 화면 라우팅·URL 파라미터·기능 배선
+│   ├── main.js                 # 부트스트랩(377줄) — store/router/guide 배선, 진입 핸들러
 │   ├── config.js               # 폼·대시보드·키오스크 설정 (운영자 수정 지점)
 │   ├── i18n.js                 # 다국어(ko/en) 문자열 사전 + 언어 판별
 │   ├── flow.js                 # 화면 흐름 상태머신 (START→GUIDE→SURVEY→DONE)
@@ -212,6 +213,16 @@ raon-friends-ar/
 │   ├── survey.js               # 설문 렌더링·검증·구글 폼 전송
 │   ├── queue.js                # 오프라인 응답 큐
 │   ├── capture.js              # 기념 스크린샷 합성·공유
+│   ├── app/                    # 셸 모듈 (v1.4.0 — main.js에서 분리)
+│   │   ├── store.js             # URL 파라미터 파싱 + 구독 가능한 앱 상태
+│   │   ├── storage-keys.js      # localStorage 키 상수
+│   │   ├── router.js            # data-screen/data-mode 전환 단일 소유
+│   │   ├── scenes.js            # asScene/NullScene — 씬 메서드 계약
+│   │   ├── guide.js             # 안내·설문 흐름 (모드 무관)
+│   │   ├── entry.js             # createOnceGuard — 모드 진입 중복 방지
+│   │   ├── labels.js            # 시작 화면 정적 라벨 대입
+│   │   ├── start-screen.js      # 온보딩·크기 칩·운영자 시트·언어/음소거 토글
+│   │   └── timing.js            # scaledMs — ?timerScale= E2E 대기시간 단축
 │   ├── scenes/
 │   │   ├── overlay.js          # 오버레이 모드 (카메라 + 자이로 + 지면 앵커)
 │   │   ├── marker.js           # 카드 마커 모드 (MindAR, 지연 로드)
@@ -224,9 +235,15 @@ raon-friends-ar/
 │   ├── models/                 # 캐릭터 3종 FBX + 텍스처
 │   ├── targets/                # 마커 카드 3장 + cards.mind
 │   └── sw.js                   # 오프라인 자산 캐시 (stale-while-revalidate)
-├── test/                       # Vitest 59개
+├── test/                       # Vitest 120개
+├── scripts/
+│   ├── e2e.mjs                  # E2E 러너 (npm run e2e)
+│   ├── e2e/
+│   │   ├── harness.mjs          # puppeteer-core 하네스 (fake 카메라 headless Chrome)
+│   │   └── scenarios/           # S0~S7 8종 (시작화면·오버레이·정체성·Vision·카드폴백·설문·파라미터·자이로)
+│   └── export-usdz.mjs          # AR Quick Look용 .usdz 헤드리스 변환
 ├── docs/                       # 설계서·상태 문서·ADR·카드 PDF·QR
-└── .github/workflows/deploy.yml
+└── .github/workflows/deploy.yml # main push → npm ci → test → e2e 게이트 → build → Pages 배포
 ```
 
 ---

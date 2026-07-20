@@ -34,7 +34,7 @@
 - 시나리오 모듈 계약: `export const name = '...'; export async function run() { ... }` — 실패 시 throw.
 - `npm run e2e` — 빌드→preview 기동→전 시나리오 순차 실행→요약 출력, 실패 시 exit 1.
 
-- [ ] **Step 1: 의존성·스크립트 추가**
+- [x] **Step 1: 의존성·스크립트 추가**
 
 ```bash
 cd /Users/wantaek/Desktop/raon-friends-ar
@@ -46,7 +46,7 @@ npm install --ignore-scripts --save-dev puppeteer-core
 "e2e": "node scripts/e2e.mjs"
 ```
 
-- [ ] **Step 2: 하네스 작성** — `scripts/e2e/harness.mjs` 전체:
+- [x] **Step 2: 하네스 작성** — `scripts/e2e/harness.mjs` 전체:
 
 ```js
 // E2E 하네스 — vite preview(빌드 산출물) 위에서 headless Chrome을 fake 카메라로 구동한다.
@@ -131,7 +131,7 @@ export async function readBubble(page, { settleMs = 2500 } = {}) {
 }
 ```
 
-- [ ] **Step 3: 러너 작성** — `scripts/e2e.mjs` 전체:
+- [x] **Step 3: 러너 작성** — `scripts/e2e.mjs` 전체:
 
 ```js
 // E2E 러너 — 시나리오를 순차 실행하고 요약을 출력한다. 실패 1건이라도 있으면 exit 1.
@@ -164,7 +164,7 @@ console.log(failed ? `실패 ${failed}건` : '전체 그린');
 process.exit(failed ? 1 : 0);
 ```
 
-- [ ] **Step 4: 시나리오 S0** — `scripts/e2e/scenarios/s0-start.mjs` 전체:
+- [x] **Step 4: 시나리오 S0** — `scripts/e2e/scenarios/s0-start.mjs` 전체:
 
 ```js
 // S0: 시작 화면 — 타이틀·모드 버튼 3종·언어 토글이 렌더되고 콘솔 에러가 없다.
@@ -189,14 +189,14 @@ export async function run() {
 }
 ```
 
-- [ ] **Step 5: 실행해 그린 확인**
+- [x] **Step 5: 실행해 그린 확인**
 
 ```bash
 npm run e2e
 ```
 Expected: `✓ S0 시작 화면 렌더` / `전체 그린` / exit 0. (`scripts/e2e/.screenshots/`는 `.gitignore`에 추가)
 
-- [ ] **Step 6: Commit** — `test: E2E 하네스 + S0 시작 화면 (fake 카메라 headless)`
+- [x] **Step 6: Commit** — `test: E2E 하네스 + S0 시작 화면 (fake 카메라 headless)`
 
 ### Task 2: S1 오버레이 전체 플로우
 
@@ -206,7 +206,7 @@ Expected: `✓ S0 시작 화면 렌더` / `전체 그린` / exit 0. (`scripts/e2
 
 **Interfaces (Consumes):** Task 1의 `withPage`/`dismissOnboarding`/`readBubble`.
 
-- [ ] **Step 1: 시나리오 작성** — 전체:
+- [x] **Step 1: 시나리오 작성** — 전체:
 
 ```js
 // S1: 기본 경로 — 온보딩 → 오버레이 → 릴레이 3캐릭터 배턴터치 → 설문 화면 진입.
@@ -242,8 +242,8 @@ export async function run() {
 }
 ```
 
-- [ ] **Step 2: 러너 등록 후 실행** — `scenarioModules`에 `'./e2e/scenarios/s1-overlay-flow.mjs'` 추가, `npm run e2e` → S0·S1 그린.
-- [ ] **Step 3: Commit** — `test: S1 오버레이 배턴터치 전체 플로우 고정`
+- [x] **Step 2: 러너 등록 후 실행** — `scenarioModules`에 `'./e2e/scenarios/s1-overlay-flow.mjs'` 추가, `npm run e2e` → S0·S1 그린.
+- [x] **Step 3: Commit** — `test: S1 오버레이 배턴터치 전체 플로우 고정`
 
 ### Task 3: S2 단독 진행 정체성 + S3 Vision mock
 
@@ -252,7 +252,7 @@ export async function run() {
 - Create: `scripts/e2e/scenarios/s3-vision-mock.mjs`
 - Modify: `scripts/e2e.mjs`
 
-- [ ] **Step 1: S2 작성** — 전체:
+- [x] **Step 1: S2 작성** — 전체:
 
 ```js
 // S2: ?char= 단독 진행 — 3캐릭터 각각, 전 대사에서 "다른 캐릭터 이름 0회" 불변식.
@@ -284,7 +284,7 @@ export async function run() {
 }
 ```
 
-- [ ] **Step 2: S3 작성** — 전체:
+- [x] **Step 2: S3 작성** — 전체:
 
 ```js
 // S3: Vision mock — ?visionMock=raong으로 진입해 인식 게이트 통과 후 라옹 단독 진행 확인.
@@ -304,8 +304,8 @@ export async function run() {
 }
 ```
 
-- [ ] **Step 3: 러너 등록·실행·확인** — S0~S3 그린. 실패 시 시나리오의 대기시간(settleMs)만 조정 — **앱 코드는 이 Phase에서 수정 금지** (버그 발견 시 기록만 하고 사용자 보고).
-- [ ] **Step 4: Commit** — `test: S2 정체성·S3 Vision mock 시나리오`
+- [x] **Step 3: 러너 등록·실행·확인** — S0~S3 그린. 실패 시 시나리오의 대기시간(settleMs)만 조정 — **앱 코드는 이 Phase에서 수정 금지** (버그 발견 시 기록만 하고 사용자 보고).
+- [x] **Step 4: Commit** — `test: S2 정체성·S3 Vision mock 시나리오`
 
 ### Task 4: 타이머 배속 + S4 카드 폴백 + S5 설문 전송·오프라인 큐
 
@@ -319,7 +319,7 @@ export async function run() {
 
 **Interfaces (Produces):** `scaledMs(baseMs, search?)` — `?timerScale=0.1`이면 baseMs×0.1(하한 50ms). 파라미터 없으면 원값. E2E·리허설 전용이며 README에는 넣지 않는다.
 
-- [ ] **Step 1: 실패 테스트** — `test/timing.test.js` 전체:
+- [x] **Step 1: 실패 테스트** — `test/timing.test.js` 전체:
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -334,7 +334,7 @@ describe('scaledMs', () => {
 ```
 Run: `npx vitest run test/timing.test.js` → FAIL (모듈 없음).
 
-- [ ] **Step 2: 구현** — `src/app/timing.js` 전체:
+- [x] **Step 2: 구현** — `src/app/timing.js` 전체:
 
 ```js
 // 테스트·리허설용 타이머 배속 — ?timerScale=0.1이면 대기 시간이 1/10로 줄어든다.
@@ -348,7 +348,7 @@ export function scaledMs(baseMs, search = location.search) {
 ```
 테스트 그린 확인. main.js에서 마커 폴백 `30000` → `scaledMs(30000)`, 키오스크 리셋 대기 상수에도 동일 적용(해당 상수를 찾아 `scaledMs(...)`로 감싼다 — `armKioskReset` 정의부).
 
-- [ ] **Step 3: S4 작성** — 전체:
+- [x] **Step 3: S4 작성** — 전체:
 
 ```js
 // S4: 카드 모드 — fake 카메라로는 인식 불가 → 폴백 버튼 노출 → 오버레이 폴백까지.
@@ -368,7 +368,7 @@ export async function run() {
 }
 ```
 
-- [ ] **Step 4: S5 작성** — 전체:
+- [x] **Step 4: S5 작성** — 전체:
 
 ```js
 // S5: 설문 제출 — 구글폼 POST를 네트워크 인터셉트로 스텁(실전송 금지). 차단 상태에선
@@ -422,7 +422,7 @@ export async function run() {
 ```
 주의: 셀렉터·localStorage 키는 작성 시점에 `src/survey.js`·`src/queue.js`·`src/main.js(submitAndRetry)`를 열어 실제 값으로 맞춘다(위 코드의 후보 셀렉터 중 실존하는 것으로 확정). **앱 코드는 수정 금지.**
 
-- [ ] **Step 5: 러너 등록·실행** — S0~S5 그린. **Commit** — `test: S4 카드 폴백·S5 설문 스텁/오프라인 큐 + 타이머 배속(scaledMs)`
+- [x] **Step 5: 러너 등록·실행** — S0~S5 그린. **Commit** — `test: S4 카드 폴백·S5 설문 스텁/오프라인 큐 + 타이머 배속(scaledMs)`
 
 ### Task 5: S6(en·kiosk·size) + CI 게이트 + usdz 러너 정리
 
@@ -430,7 +430,7 @@ export async function run() {
 - Create: `scripts/e2e/scenarios/s6-params.mjs`
 - Modify: `scripts/e2e.mjs`, `.github/workflows/deploy.yml`, `scripts/export-usdz.mjs`
 
-- [ ] **Step 1: S6 작성** — 전체:
+- [x] **Step 1: S6 작성** — 전체:
 
 ```js
 // S6: 파라미터 매트릭스 — ?lang=en 문구, ?kiosk=1 온보딩 생략, 크기 칩 상태.
@@ -462,7 +462,7 @@ export async function run() {
 }
 ```
 
-- [ ] **Step 2: CI 게이트** — `.github/workflows/deploy.yml`의 `build` 잡 `npm run build` 다음에 스텝 추가:
+- [x] **Step 2: CI 게이트** — `.github/workflows/deploy.yml`의 `build` 잡 `npm run build` 다음에 스텝 추가:
 
 ```yaml
       - name: E2E
@@ -470,9 +470,9 @@ export async function run() {
 ```
 (ubuntu-latest에 google-chrome 사전 설치. e2e가 실패하면 upload-pages-artifact에 도달하지 않아 배포가 게이트된다.)
 
-- [ ] **Step 3: usdz 러너 정리** — `scripts/export-usdz.mjs`에서 `PUPPETEER_DIR`/`createRequire` 블록 삭제 → `import puppeteer from 'puppeteer-core';`로 교체(이제 devDep). 사용법 주석도 갱신.
-- [ ] **Step 4: 전체 실행** — `npm test` + `npm run e2e` 그린. **Commit** — `test: S6 파라미터 매트릭스 + CI e2e 게이트 + usdz 러너 devDep 전환`
-- [ ] **Step 5: Phase 0 완료 push** — `git push origin main` 후 Actions에서 e2e 잡 그린 + 배포 성공 확인 (사이트 폴링). **여기가 "현재 동작 고정" 기준선이다.**
+- [x] **Step 3: usdz 러너 정리** — `scripts/export-usdz.mjs`에서 `PUPPETEER_DIR`/`createRequire` 블록 삭제 → `import puppeteer from 'puppeteer-core';`로 교체(이제 devDep). 사용법 주석도 갱신.
+- [x] **Step 4: 전체 실행** — `npm test` + `npm run e2e` 그린. **Commit** — `test: S6 파라미터 매트릭스 + CI e2e 게이트 + usdz 러너 devDep 전환`
+- [x] **Step 5: Phase 0 완료 push** — `git push origin main` 후 Actions에서 e2e 잡 그린 + 배포 성공 확인 (사이트 폴링). **여기가 "현재 동작 고정" 기준선이다.**
 
 ---
 
@@ -488,7 +488,7 @@ export async function run() {
 - `STORAGE_KEYS = { onboardingSeen, overlayLookHintSeen, soundMuted, surveyQueue }` — 실값은 현재 코드에서 grep으로 수집해 **기존 문자열 그대로** 옮긴다(마이그레이션 금지).
 - `createStore(search)` → `{ get(key), set(key, value), subscribe(fn): unsubscribe, params }`. 초기 상태: `{ kiosk, charParam, characterHeight, cameraFacing, lockedCharacter: null }` — 파싱 규칙은 현재 main.js L74~80과 동일(`SIZE_HEIGHTS = { life: 1.8, giant: 2.5 }`).
 
-- [ ] **Step 1: 실패 테스트** — `test/store.test.js` 전체:
+- [x] **Step 1: 실패 테스트** — `test/store.test.js` 전체:
 
 ```js
 import { describe, it, expect, vi } from 'vitest';
@@ -521,7 +521,7 @@ describe('createStore', () => {
 });
 ```
 
-- [ ] **Step 2: 구현** — `src/app/store.js` 전체:
+- [x] **Step 2: 구현** — `src/app/store.js` 전체:
 
 ```js
 // 앱 상태 단일 소유 — URL 파라미터 파싱 규칙은 기존 main.js와 동일해야 한다(동작 보존).
@@ -554,7 +554,7 @@ export function createStore(search = location.search) {
 
 `src/app/storage-keys.js`: 현재 코드에서 `localStorage.(get|set)Item` 전 호출을 grep, 키 문자열을 그대로 상수화하고 호출부를 상수 참조로 바꾼다(값 불변).
 
-- [ ] **Step 3: 테스트 그린 + e2e 그린 확인 후 Commit** — `refactor: app/store 상태 단일화 + storage-keys 상수화`
+- [x] **Step 3: 테스트 그린 + e2e 그린 확인 후 Commit** — `refactor: app/store 상태 단일화 + storage-keys 상수화`
 
 ### Task 7: app/router.js + 화면 전환 일원화
 
@@ -564,7 +564,7 @@ export function createStore(search = location.search) {
 
 **Interfaces (Produces):** `createRouter(root = document.body)` → `{ show(screen), screen(), setMode(mode | null), mode() }`. screen 값: `start|guide|survey|done|marker|vision|direct-survey|error`. mode 값: `marker-flow|xr|null`.
 
-- [ ] **Step 1: 실패 테스트** — `test/router.test.js` 전체 (vitest jsdom 환경):
+- [x] **Step 1: 실패 테스트** — `test/router.test.js` 전체 (vitest jsdom 환경):
 
 ```js
 // @vitest-environment jsdom
@@ -589,7 +589,7 @@ describe('createRouter', () => {
 });
 ```
 
-- [ ] **Step 2: 구현** — `src/app/router.js` 전체:
+- [x] **Step 2: 구현** — `src/app/router.js` 전체:
 
 ```js
 // 화면·모드 전환의 단일 소유자 — 이 모듈 밖에서 data-screen/data-mode를 만지거나
@@ -607,7 +607,7 @@ export function createRouter(root = document.body) {
 }
 ```
 
-- [ ] **Step 3: CSS 이관** — `style.css`에 추가하고 JS 인라인 토글을 대체:
+- [x] **Step 3: CSS 이관** — `style.css`에 추가하고 JS 인라인 토글을 대체:
 
 ```css
 /* 화면 전환은 router(data-screen/data-mode)가 단독 소유 — JS의 style.display 토글 금지 */
@@ -625,7 +625,7 @@ body[data-mode="xr"] #three-canvas { display: none; }
 ```
 main.js에서: `syncScreen()` 구현을 `router.show(flow.screen)`으로, `#screen-marker/#screen-vision` `style.display` 대입 8곳을 `router.show('marker')`·`router.setMode('marker-flow')` 등으로, `body.classList.add('marker-flow')`·`xr-active` 추가/제거를 `router.setMode(...)`로 교체. 기존 `body.marker-flow`·`body.xr-active` CSS 규칙과 `#screen-marker{display:none}` 기본값 등 낡은 셀렉터는 삭제. `#screen-direct-survey`·`#error-screen`의 hidden 속성 토글은 그대로 두되 화면 상태와 겹치면 data-screen으로 통일.
 
-- [ ] **Step 4: 검증** — `npm test` + `npm run e2e` 전체 그린(특히 S4 카드 폴백·S1). 헤드리스 스크린샷 s0/s1을 이전 아카이브와 눈으로 대조. **Commit** — `refactor: router로 화면·모드 전환 일원화 (3중 메커니즘 제거)`
+- [x] **Step 4: 검증** — `npm test` + `npm run e2e` 전체 그린(특히 S4 카드 폴백·S1). 헤드리스 스크린샷 s0/s1을 이전 아카이브와 눈으로 대조. **Commit** — `refactor: router로 화면·모드 전환 일원화 (3중 메커니즘 제거)`
 
 ### Task 8: app/scenes.js — 씬 계약 + NullScene
 
@@ -637,7 +637,7 @@ main.js에서: `syncScreen()` 구현을 `router.show(flow.screen)`으로, `#scre
 - `SCENE_METHODS = ['setCharacter','playEntrance','playMotion','burst','stopCamera','pause','resume','stop']`
 - `asScene(impl)` → 모든 메서드가 존재하는 Scene(없는 메서드는 no-op, this 바인딩 유지). `NullScene = asScene()`.
 
-- [ ] **Step 1: 실패 테스트** — `test/scenes.test.js` 전체:
+- [x] **Step 1: 실패 테스트** — `test/scenes.test.js` 전체:
 
 ```js
 import { describe, it, expect, vi } from 'vitest';
@@ -657,7 +657,7 @@ describe('asScene', () => {
 });
 ```
 
-- [ ] **Step 2: 구현** — `src/app/scenes.js` 전체:
+- [x] **Step 2: 구현** — `src/app/scenes.js` 전체:
 
 ```js
 // 씬 공통 계약 — overlay/marker/webxr가 부분적으로만 구현하는 API를 전 메서드 보장형으로
@@ -681,8 +681,8 @@ export function asScene(impl = {}) {
 export const NullScene = asScene();
 ```
 
-- [ ] **Step 3: main.js 적용** — `let activeScene = null` → `let activeScene = NullScene`; `activeScene = overlay` → `activeScene = asScene(overlay)`(webxr·마커도 동일); `activeScene?.stopCamera?.()` 등 `?.` 가드 12곳을 일반 호출로. `ensureCharacter`의 `if (!activeScene || ...)` → `if (activeScene === NullScene || speaker === currentSpeaker) return;`.
-- [ ] **Step 4: 검증 후 Commit** — test+e2e 그린 → `refactor: Scene 계약(asScene/NullScene)으로 씬 인터페이스 통일`
+- [x] **Step 3: main.js 적용** — `let activeScene = null` → `let activeScene = NullScene`; `activeScene = overlay` → `activeScene = asScene(overlay)`(webxr·마커도 동일); `activeScene?.stopCamera?.()` 등 `?.` 가드 12곳을 일반 호출로. `ensureCharacter`의 `if (!activeScene || ...)` → `if (activeScene === NullScene || speaker === currentSpeaker) return;`.
+- [x] **Step 4: 검증 후 Commit** — test+e2e 그린 → `refactor: Scene 계약(asScene/NullScene)으로 씬 인터페이스 통일`
 
 ### Task 9: app/guide.js — 안내·설문 흐름 분리
 
@@ -707,7 +707,7 @@ createGuide({ config, router, sound, showLine, loadCharacter, buildSoloGuideScri
 }
 ```
 
-- [ ] **Step 1: 실패 테스트** — `test/guide.test.js` 전체 (DOM 없는 순수 부분만 — begin/lockTo/speaker/surveySpeaker):
+- [x] **Step 1: 실패 테스트** — `test/guide.test.js` 전체 (DOM 없는 순수 부분만 — begin/lockTo/speaker/surveySpeaker):
 
 ```js
 // @vitest-environment jsdom
@@ -758,8 +758,8 @@ describe('createGuide', () => {
 });
 ```
 
-- [ ] **Step 2: 구현** — `src/app/guide.js`: 위 계약대로. **본문은 main.js에서 그대로 이동**한다(동작 보존): `ensureCharacter`(main.js `async function ensureCharacter` 전체), `renderGuide`, `btn-next` 핸들러 본문 → `next()`, `startSurvey`+`reactionsFor`(surveySpeaker 치환 포함), `guideSpeakerLock` → 내부 `lockedCharacter`. flow는 `createFlow`를 내부 import. 이동 후 main.js에서 원본 삭제.
-- [ ] **Step 3: 검증 후 Commit** — test(신규 3+기존 전체)+e2e(S1·S2가 최종 심판) 그린 → `refactor: guide 모듈로 안내·설문 흐름 분리 (모드 무관)`
+- [x] **Step 2: 구현** — `src/app/guide.js`: 위 계약대로. **본문은 main.js에서 그대로 이동**한다(동작 보존): `ensureCharacter`(main.js `async function ensureCharacter` 전체), `renderGuide`, `btn-next` 핸들러 본문 → `next()`, `startSurvey`+`reactionsFor`(surveySpeaker 치환 포함), `guideSpeakerLock` → 내부 `lockedCharacter`. flow는 `createFlow`를 내부 import. 이동 후 main.js에서 원본 삭제.
+- [x] **Step 3: 검증 후 Commit** — test(신규 3+기존 전체)+e2e(S1·S2가 최종 심판) 그린 → `refactor: guide 모듈로 안내·설문 흐름 분리 (모드 무관)`
 
 ### Task 10: app/entry.js + main.js 부트스트랩 재작성
 
@@ -772,7 +772,7 @@ describe('createGuide', () => {
 - `bindLabels(config)` (labels.js) — 현재 main.js의 `document.getElementById(...).textContent = CONFIG...` 라벨 대입 ~30줄 전부 이동.
 - `initStartScreen({ config, store, sound, onOverlay, onMarker, onVision, onDirectSurvey })` (start-screen.js) — 온보딩·캐릭터 카드·크기 칩·운영자 시트·언어 토글·효과음 토글 이동.
 
-- [ ] **Step 1: entry 테스트·구현** — `test/entry.test.js`:
+- [x] **Step 1: entry 테스트·구현** — `test/entry.test.js`:
 
 ```js
 import { describe, it, expect, vi } from 'vitest';
@@ -803,9 +803,9 @@ export function createOnceGuard() {
 }
 ```
 
-- [ ] **Step 2: labels.js·start-screen.js로 기계적 이동** — main.js에서 해당 블록(라벨 대입 전부 / `initOnboarding`·캐릭터 카드·크기 칩·운영자 시트·언어 토글·효과음 토글)을 함수로 감싸 이동. 코드 내용 변경 금지, import만 정리.
-- [ ] **Step 3: main.js 재작성** — 남는 것: import·전역 에러 가드(showErrorScreen)·store/router/guide 생성·진입 핸들러(startOverlayFlow/enterMarkerMode/enterVisionMode/startMarkerFlow — guide·router·entry 사용으로 축약)·goHome/popstate·XR/QuickLook 버튼·기념사진·SW 등록. 각 핸들러는 기존 본문을 유지하되 syncScreen→router, activeScene→guide.setScene, guideSpeakerLock→guide.lockTo로 치환.
-- [ ] **Step 4: 검증** — `wc -l src/main.js` ≤ 150 / `grep -c "?\\." src/main.js`에서 씬 가드 0 / `grep -c "style.display" src/main.js` = 0 / `npm test`·`npm run e2e` 전체 그린 + 스크린샷 대조. **Commit** — `refactor: main.js 부트스트랩化 — entry/labels/start-screen 분리 (932→≤150줄)`
+- [x] **Step 2: labels.js·start-screen.js로 기계적 이동** — main.js에서 해당 블록(라벨 대입 전부 / `initOnboarding`·캐릭터 카드·크기 칩·운영자 시트·언어 토글·효과음 토글)을 함수로 감싸 이동. 코드 내용 변경 금지, import만 정리.
+- [x] **Step 3: main.js 재작성** — 남는 것: import·전역 에러 가드(showErrorScreen)·store/router/guide 생성·진입 핸들러(startOverlayFlow/enterMarkerMode/enterVisionMode/startMarkerFlow — guide·router·entry 사용으로 축약)·goHome/popstate·XR/QuickLook 버튼·기념사진·SW 등록. 각 핸들러는 기존 본문을 유지하되 syncScreen→router, activeScene→guide.setScene, guideSpeakerLock→guide.lockTo로 치환.
+- [x] **Step 4: 검증** — `wc -l src/main.js` ≤ 150 / `grep -c "?\\." src/main.js`에서 씬 가드 0 / `grep -c "style.display" src/main.js` = 0 / `npm test`·`npm run e2e` 전체 그린 + 스크린샷 대조. **Commit** — `refactor: main.js 부트스트랩化 — entry/labels/start-screen 분리 (932→≤150줄)`
 
 ### Task 11: overlay orientationProvider 주입 + 자이로 E2E
 
@@ -815,19 +815,19 @@ export function createOnceGuard() {
 
 **Interfaces (Produces):** `initOverlay({ ..., orientationProvider })` — `orientationProvider(cb)` 형태(기본값: `(cb) => window.addEventListener('deviceorientation', cb)`). E2E는 `window.__fakeOrientation = cb` 노출 파라미터(`?fakeGyro=1`) 대신 **provider 주입을 main.js에서 분기**: `store.params.get('fakeGyro') === '1'`이면 window에 콜백을 노출하는 provider 사용.
 
-- [ ] **Step 1: overlay 수정** — `window.addEventListener('deviceorientation', handler)` 한 줄을 `((orientationProvider) ?? default)(handler)`로. 기본 동작 완전 동일.
-- [ ] **Step 2: S7 작성** — `?fakeGyro=1`로 진입 → `page.evaluate(() => window.__fakeOrientation({ alpha: 10, beta: 45, gamma: 0 }))` 수회 주입 → three 카메라 쿼터니언이 변했는지 `window.__overlayCameraQuat`(fakeGyro 모드에서만 노출) 비교로 단언. 콘솔 에러 0.
-- [ ] **Step 3: 검증 후 Commit** — `feat: 자이로 provider 주입 — 자이로 경로 헤드리스 검증(S7)`
+- [x] **Step 1: overlay 수정** — `window.addEventListener('deviceorientation', handler)` 한 줄을 `((orientationProvider) ?? default)(handler)`로. 기본 동작 완전 동일.
+- [x] **Step 2: S7 작성** — `?fakeGyro=1`로 진입 → `page.evaluate(() => window.__fakeOrientation({ alpha: 10, beta: 45, gamma: 0 }))` 수회 주입 → three 카메라 쿼터니언이 변했는지 `window.__overlayCameraQuat`(fakeGyro 모드에서만 노출) 비교로 단언. 콘솔 에러 0.
+- [x] **Step 3: 검증 후 Commit** — `feat: 자이로 provider 주입 — 자이로 경로 헤드리스 검증(S7)`
 
 ### Task 12: three dedupe + 마무리
 
 **Files:**
 - Modify: `vite.config.js`(`resolve.dedupe: ['three']`), `docs/CURRENT_STATE.md`, `docs/NEXT_STEP.md`, `README.md`(저장소 구조도), `package.json`(1.4.0), 본 계획 체크박스
 
-- [ ] **Step 1: dedupe 적용** — 빌드 후 S1 실행 시 콘솔에 "Multiple instances of Three.js" 경고가 **없음**을 e2e 에러 수집기 로그로 확인(경고는 console.warn이라 수동 확인: `page.on('console')`에서 warn도 일시 수집해 검사하는 단언을 S0에 추가).
-- [ ] **Step 2: 문서 동기화** — CURRENT_STATE에 v1.4.0 항목(모듈 구조·E2E 매트릭스·성공 기준 달성 수치), README 저장소 구조도에 `src/app/`·`scripts/e2e/` 반영, NEXT_STEP 정리.
+- [x] **Step 1: dedupe 적용** — 빌드 후 S1 실행 시 콘솔에 "Multiple instances of Three.js" 경고가 **없음**을 e2e 에러 수집기 로그로 확인(경고는 console.warn이라 수동 확인: `page.on('console')`에서 warn도 일시 수집해 검사하는 단언을 S0에 추가).
+- [x] **Step 2: 문서 동기화** — CURRENT_STATE에 v1.4.0 항목(모듈 구조·E2E 매트릭스·성공 기준 달성 수치), README 저장소 구조도에 `src/app/`·`scripts/e2e/` 반영, NEXT_STEP 정리.
 - [ ] **Step 3: 최종 검증** — `npm test`(전체)·`npm run e2e`(S0~S7) 그린, `wc -l src/main.js` 기록. **Commit + tag v1.4.0 + push 1회** → Actions e2e 게이트·배포·사이트 폴링 확인.
-- [ ] **Step 4: 실기기 체크리스트 보고** — 마커 실트래킹·실자이로·Quick Look·효과음은 사용자 확인 항목으로 정리해 전달.
+- [x] **Step 4: 실기기 체크리스트 보고** — 마커 실트래킹·실자이로·Quick Look·효과음은 사용자 확인 항목으로 정리해 전달.
 
 ## Self-Review 결과
 

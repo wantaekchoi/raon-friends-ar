@@ -47,8 +47,11 @@ export async function withPage(fn, { params = '' } = {}) {
   const page = await context.newPage();
   await page.setViewport({ width: 390, height: 844 });
   const errors = [];
+  const warnings = []; // console.warn 전용 별도 수집 — 에러 판정(errors)과 무관, 통과/실패에 영향 없음.
+  // 시나리오가 특정 경고의 부재를 직접 단언하고 싶을 때 참조한다(예: three dedupe 검증).
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
+    if (m.type() === 'warning') warnings.push(m.text());
     if (m.type() !== 'error') return;
     // 브라우저가 페이지 콘텐츠와 무관하게 항상 자동 요청하는 /favicon.ico 404는 앱 리소스가 아니라
     // 브라우저 자체의 관례적 요청이므로 제외한다. 그 외 모든 리소스 404(sw 캐시 미스 등)는 계속 실패로 취급한다.
@@ -57,6 +60,7 @@ export async function withPage(fn, { params = '' } = {}) {
   });
   const ctx = {
     errors,
+    warnings,
     shot: (name) => page.screenshot({ path: join(SHOT_DIR, `${name}.png`) }),
   };
   try {
