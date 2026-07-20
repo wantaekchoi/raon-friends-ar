@@ -336,6 +336,25 @@ async function submitAndRetry(answers, { onMessage, retryParent, onFail }) {
   }
 }
 
+// iOS 자이로 권한 — 반드시 사용자 제스처(버튼 탭) 안에서 1회 요청해 캐시한다.
+// 소환/Vision 인식처럼 타이머·콜백으로 오버레이에 진입하는 경로는 제스처가 아니라 요청이
+// 조용히 거부되고, 그 결과 시점 고정(화면 중앙 박제) 폴백으로 떨어진다(실기기 피드백 2026-07-20).
+let gyroGranted; // undefined = 미요청
+async function ensureGyroPermission() {
+  if (gyroGranted !== undefined) return gyroGranted;
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined'
+        && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      gyroGranted = (await DeviceOrientationEvent.requestPermission()) === 'granted';
+    } else {
+      gyroGranted = 'DeviceOrientationEvent' in window;
+    }
+  } catch {
+    gyroGranted = false;
+  }
+  return gyroGranted;
+}
+
 // 카메라 권한 프롬프트 대기 중 중복 탭으로 initOverlay가 두 번 실행되는 것 방지
 // (스트림·렌더러·리스너가 두 세트 생겨 리소스 누수)
 let overlayEntering = false;
@@ -348,15 +367,37 @@ async function startOverlayFlow() {
   document.getElementById('btn-home').hidden = false;
   flow.start();
   syncScreen();
+  const gyroOk = await ensureGyroPermission();
   overlay = await initOverlay({
     videoEl: document.getElementById('camera-video'),
     canvasEl: document.getElementById('three-canvas'),
+    gyroAllowed: gyroOk,
     // E2 매직미러: size/camera 파라미터가 있을 때만 옵션을 전달한다 — overlay.js가 아직
     // 해당 옵션을 지원하지 않는 상태에서도(A팩 작업 중) 여분의 키는 무시되어 안전하다.
     ...(characterHeight !== undefined && { characterHeight }),
     ...(cameraFacingParam !== undefined && { cameraFacing: cameraFacingParam }),
   });
   activeScene = overlay;
+  {
+    const hintEl = document.getElementById('xr-hint');
+    let hintText = null;
+    if (!gyroOk) {
+      hintText = CONFIG.ui.gyroOffHint;
+    } else {
+      // 자이로가 켜져 있어도 위치(6DoF)는 추적 불가 — 최초 1회만 행동 유도 (걸어가면 밀려나는 한계 안내)
+      try {
+        if (!localStorage.getItem('overlayLookHintSeen')) {
+          hintText = CONFIG.ui.overlayLookHint;
+          localStorage.setItem('overlayLookHintSeen', '1');
+        }
+      } catch { /* localStorage 불가 — 힌트 생략 */ }
+    }
+    if (hintText) {
+      hintEl.textContent = hintText;
+      hintEl.hidden = false;
+      setTimeout(() => { hintEl.hidden = true; }, 5000);
+    }
+  }
   // 최초 진입은 항상 라옹(환영 담당) — 단, ?char=로 화자가 고정된 경우 그 캐릭터
   await ensureCharacter(flow.line.speaker);
   renderGuide();
@@ -459,6 +500,7 @@ let markerEntering = false;
 async function enterMarkerMode() {
   if (markerEntering) return;
   markerEntering = true;
+  ensureGyroPermission(); // 제스처 컨텍스트에서 선요청 — 소환 후 오버레이 전환 대비 (await 안 함: 프롬프트와 병행 진행)
 
   const btnMarker = document.getElementById('btn-marker');
   const labelEl = document.getElementById('btn-marker-label');
@@ -550,6 +592,7 @@ let visionEntering = false;
 
 async function enterVisionMode() {
   if (visionEntering) return;
+  ensureGyroPermission(); // 제스처 컨텍스트 선요청 — 인식 후 오버레이 전환 대비
   visionEntering = true;
 
   const btnVision = document.getElementById('btn-vision');

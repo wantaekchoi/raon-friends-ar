@@ -113,9 +113,11 @@ export async function initOverlay({
   canvasEl,
   characterHeight = 1.2,
   cameraFacing = 'environment',
+  gyroAllowed: gyroAllowedOpt,
 }) {
-  // 제스처 컨텍스트가 살아있을 때 자이로 권한부터 (iOS)
-  const gyroAllowed = await requestGyroPermission();
+  // iOS 자이로 권한은 사용자 제스처 안에서만 요청 가능 — 소환/인식 등 비제스처 경로로 진입할 땐
+  // main.js가 첫 탭 순간에 미리 받아둔 결과(gyroAllowedOpt)를 넘겨준다. 없으면 여기서 직접 요청.
+  const gyroAllowed = gyroAllowedOpt !== undefined ? gyroAllowedOpt : await requestGyroPermission();
   await startCamera(videoEl, cameraFacing);
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, alpha: true, antialias: true });
