@@ -1,8 +1,7 @@
 import './style.css';
 import { CONFIG, SURVEY_QUESTIONS, GOOGLE_FORM } from './config.js';
 import { SCREENS } from './flow.js';
-import { initOverlay } from './scenes/overlay.js';
-import { isXRSupported, startXR } from './scenes/webxr.js';
+import { startXR } from './scenes/webxr.js';
 import { showLine } from './ui/bubble.js';
 import { loadCharacter } from './characters.js';
 import { renderSurvey, submitSurvey } from './survey.js';
@@ -11,48 +10,20 @@ import { initSound } from './sound.js';
 import { captureMoment } from './capture.js';
 import { buildSoloGuideScript } from './solo-character.js';
 import { scaledMs } from './app/timing.js';
-import { STORAGE_KEYS } from './app/storage-keys.js';
+import { createStore } from './app/store.js';
 import { createRouter } from './app/router.js';
 import { asScene } from './app/scenes.js';
 import { createGuide } from './app/guide.js';
-
-// F1 다국어 — html lang·문서 제목을 현재 언어에 맞춘다 (CONFIG.lang은 config.js가 모듈 로드
-// 시점에 currentLang()으로 이미 판별해 둔 값).
-document.documentElement.lang = CONFIG.lang;
-document.title = CONFIG.title;
-
-// 효과음 (B팩) — muted 상태는 localStorage에 저장되며, 아이콘·클래스를 상태와 동기화한다.
-const sound = initSound();
-{
-  const btnSound = document.getElementById('btn-sound');
-  const syncSoundBtn = (muted) => {
-    btnSound.textContent = muted ? '🔇' : '🔊';
-    btnSound.classList.toggle('is-muted', muted);
-    btnSound.setAttribute('aria-label', muted ? CONFIG.ui.soundOn : CONFIG.ui.soundOff);
-  };
-  syncSoundBtn(sound.muted);
-  btnSound.addEventListener('click', () => syncSoundBtn(sound.toggle()));
-}
-
-// F1 다국어 — 시작 화면 🌐 토글. URL의 ?lang= 파라미터를 반대 언어로 바꾸고 reload한다
-// (모듈 최상위에서 언어를 한 번 판별해 export하는 config.js 구조상 가장 단순하고 안전한 전환 방식).
-{
-  const btnLangToggle = document.getElementById('btn-lang-toggle');
-  btnLangToggle.textContent = CONFIG.ui.langToggleLabel;
-  btnLangToggle.setAttribute('aria-label', CONFIG.ui.langToggleAria);
-  btnLangToggle.addEventListener('click', () => {
-    const nextLang = CONFIG.lang === 'en' ? 'ko' : 'en';
-    const url = new URL(location.href);
-    url.searchParams.set('lang', nextLang);
-    location.href = url.toString();
-  });
-}
+import { initEntry } from './app/entry.js';
+import { bindLabels } from './app/labels.js';
+import { initStartScreen } from './app/start-screen.js';
 
 // ===========================================================================
 // 전역 에러 가드 (D3) — 예상 못 한 예외/거부 프로미스로 앱이 멈춰도 사용자에게
 // "라옹이가 넘어졌어요" 화면 + 다시 시작 버튼을 보여준다. 콘솔 로그는 그대로 보존해
-// 실기기 디버깅 시 원인을 추적할 수 있게 한다. 최대한 이른 시점에 등록해야
-// 이후 코드에서 발생하는 에러도 놓치지 않는다.
+// 실기기 디버깅 시 원인을 추적할 수 있게 한다. 최대한 이른 시점에 등록해야 이후 코드에서
+// 발생하는 에러도 놓치지 않는다 — import 직후, 다른 어떤 초기화보다도 먼저 등록한다
+// (원본은 사운드·언어토글 초기화 다음이었지만 그 둘도 예외를 던질 수 있으므로 더 앞으로 당겼다).
 // ===========================================================================
 let errorScreenShown = false;
 function showErrorScreen(err) {
@@ -72,21 +43,14 @@ function showErrorScreen(err) {
 window.addEventListener('error', (e) => showErrorScreen(e.error ?? e.message));
 window.addEventListener('unhandledrejection', (e) => showErrorScreen(e.reason));
 
-// ===========================================================================
-// URL 파라미터 (D4 키오스크 모드 · E2 매직미러) — ?kiosk=1&size=giant&camera=user 조합으로
-// 별도 페이지 없이 부스 설치형 매직 미러 모드가 성립한다.
-// ===========================================================================
-const urlParams = new URLSearchParams(location.search);
-const KIOSK_MODE = urlParams.get('kiosk') === '1';
-const soloCharParam = urlParams.get('char');
-const SIZE_HEIGHTS = { life: 1.8, giant: 2.5 };
-const sizeParam = urlParams.get('size');
-let characterHeight = SIZE_HEIGHTS[sizeParam]; // 매칭 안 되면 undefined(기본 크기). 시작 화면 크기 칩이 덮어쓸 수 있다.
-const cameraFacingParam = urlParams.get('camera') === 'user' ? 'user' : undefined;
+const sound = initSound();
 
 // 화면·모드 전환의 단일 소유자(셸 재작성 스펙 §2) — 이 파일 안에서 data-screen/data-mode를
 // 직접 만지거나 인라인 style로 화면을 토글하지 않는다. 전부 router를 거친다.
 const router = createRouter(document.body);
+
+// URL 파라미터(D4 키오스크 모드·E2 매직미러·F1 ?char=) 파싱의 단일 소유자.
+const store = createStore();
 
 // 안내·설문 진행 전체(flow·화자 고정·캐릭터 로딩 캐시·3D 씬 참조)를 소유하는 모듈(Task 9).
 // main.js는 이 인스턴스가 제공하는 메서드로만 진행 상태를 다룬다.
@@ -107,154 +71,9 @@ const guide = createGuide({
 // 진행한다(soloIntro + 정체성 중립 soloGuideLines로 대본을 새로 조립 — solo-character.js의
 // 공통 로직. 카드 소환·Vision AI 인식 성공 시에도 동일한 함수를 쓴다). 유효하지 않은 키는
 // guide.lockTo 내부에서 조용히 무시된다.
-guide.lockTo(soloCharParam);
+guide.lockTo(store.get('charParam'));
 
-let overlay = null;
-
-document.getElementById('start-title').textContent = CONFIG.title;
-document.getElementById('start-subtitle').textContent = CONFIG.ui.startSubtitle;
-document.getElementById('start-scarcity').textContent = CONFIG.scarcityText;
-document.getElementById('btn-overlay-label').textContent = CONFIG.ui.btnOverlay;
-document.getElementById('btn-marker-label').textContent = CONFIG.ui.btnMarker;
-document.getElementById('btn-marker-badge').textContent = CONFIG.ui.btnMarkerBadgeSoon;
-document.getElementById('btn-vision-label').textContent = CONFIG.ui.btnVision;
-document.getElementById('btn-vision-badge').textContent = CONFIG.ui.btnVisionBadge;
-document.getElementById('vision-hint').textContent = CONFIG.ui.visionHint;
-document.getElementById('vision-error-message').textContent = CONFIG.ui.visionErrorMessage;
-document.getElementById('btn-vision-fallback-overlay').textContent = CONFIG.ui.btnVisionFallbackOverlay;
-document.getElementById('btn-vision-fallback-survey').textContent = CONFIG.ui.btnVisionFallbackSurvey;
-document.getElementById('btn-vision-back').textContent = '←';
-document.getElementById('btn-vision-back').setAttribute('aria-label', CONFIG.ui.btnVisionBackAria);
-document.getElementById('hint-text').textContent = CONFIG.ui.hint;
-document.getElementById('brand-line').textContent = CONFIG.ui.brandLine;
-document.getElementById('marker-hint').textContent = CONFIG.ui.markerHint;
-document.getElementById('btn-marker-fallback').textContent = CONFIG.ui.btnMarkerFallback;
-document.getElementById('direct-survey-title').textContent = CONFIG.ui.directSurveyTitle;
-document.getElementById('btn-direct-restart').textContent = CONFIG.ui.btnRestart;
-document.getElementById('error-message').textContent = CONFIG.ui.errorMessage;
-document.getElementById('error-img').alt = CONFIG.ui.errorImgAlt;
-document.getElementById('btn-error-restart').textContent = CONFIG.ui.btnErrorRestart;
-document.getElementById('btn-capture').textContent = CONFIG.ui.btnCapture;
-document.getElementById('btn-restart').textContent = CONFIG.ui.btnRestart;
-document.getElementById('btn-xr').textContent = CONFIG.ui.btnXR;
-document.getElementById('btn-quicklook').textContent = CONFIG.ui.btnQuickLook;
-document.getElementById('btn-next').textContent = CONFIG.ui.btnNext;
-document.querySelectorAll('.google-form-link').forEach((a) => { a.textContent = CONFIG.ui.googleFormLink; });
-
-document.getElementById('start-chars').innerHTML = Object.entries(CONFIG.characters)
-  .map(([key, c], i) => `
-    <button type="button" class="char-card char-${key}" style="--float-delay: ${i * 0.35}s" aria-label="${c.name}">
-      <img src="${import.meta.env.BASE_URL}${c.img}" alt="${c.name}">
-      <span class="char-name">${c.name}</span>
-    </button>
-  `)
-  .join('');
-
-// 캐릭터 탭하면 통통 튀는 재미 요소 (장식용, flow와 무관)
-document.querySelectorAll('#start-chars .char-card').forEach((card) => {
-  card.addEventListener('click', () => {
-    card.classList.remove('char-bounce');
-    void card.offsetWidth;
-    card.classList.add('char-bounce');
-  });
-});
-
-
-// ===========================================================================
-// v1.1.0 — URL 파라미터를 몰라도 되는 인앱 메뉴 (모바일 UX)
-// ①크기 칩: 방문객이 탭으로 캐릭터 크기 선택 (reload 없이 characterHeight에 반영)
-// ②운영자 시트(⚙️): 키오스크·매직미러 토글 + 대시보드 — 적용 시 북마크 가능한 URL로 이동
-// ===========================================================================
-{
-  const chipWrap = document.getElementById('size-chips');
-  chipWrap.setAttribute('aria-label', CONFIG.ui.sizeChipsAria);
-  const sizes = [['base', undefined], ['life', SIZE_HEIGHTS.life], ['giant', SIZE_HEIGHTS.giant]];
-  const currentKey = sizeParam && SIZE_HEIGHTS[sizeParam] ? sizeParam : 'base';
-  sizes.forEach(([key, height]) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'size-chip' + (key === currentKey ? ' selected' : '');
-    b.setAttribute('role', 'radio');
-    b.setAttribute('aria-checked', key === currentKey ? 'true' : 'false');
-    b.textContent = CONFIG.ui.sizeChips[key];
-    b.addEventListener('click', () => {
-      characterHeight = height;
-      chipWrap.querySelectorAll('.size-chip').forEach((c) => {
-        c.classList.toggle('selected', c === b);
-        c.setAttribute('aria-checked', c === b ? 'true' : 'false');
-      });
-      sound.play('tap');
-    });
-    chipWrap.appendChild(b);
-  });
-}
-
-{
-  const fab = document.getElementById('btn-operator');
-  const sheet = document.getElementById('operator-sheet');
-  fab.textContent = '⚙️';
-  fab.setAttribute('aria-label', CONFIG.ui.operatorFabAria);
-  document.getElementById('operator-title').textContent = CONFIG.ui.operatorTitle;
-  document.getElementById('op-kiosk-label').textContent = CONFIG.ui.opKiosk;
-  document.getElementById('op-mirror-label').textContent = CONFIG.ui.opMirror;
-  const dash = document.getElementById('op-dashboard');
-  dash.textContent = CONFIG.ui.opDashboard;
-  dash.href = `${import.meta.env.BASE_URL}dashboard.html`;
-  document.getElementById('op-apply').textContent = CONFIG.ui.opApply;
-  document.getElementById('op-close').textContent = CONFIG.ui.opClose;
-
-  document.getElementById('op-kiosk').checked = KIOSK_MODE;
-  document.getElementById('op-mirror').checked = cameraFacingParam === 'user';
-
-  fab.addEventListener('click', () => { sheet.hidden = false; sound.play('tap'); });
-  document.getElementById('op-close').addEventListener('click', () => { sheet.hidden = true; });
-  document.getElementById('op-apply').addEventListener('click', () => {
-    const url = new URL(location.href);
-    ['kiosk', 'camera', 'size'].forEach((k) => url.searchParams.delete(k));
-    if (document.getElementById('op-kiosk').checked) url.searchParams.set('kiosk', '1');
-    if (document.getElementById('op-mirror').checked) url.searchParams.set('camera', 'user');
-    const sel = document.querySelector('.size-chip.selected');
-    const idx = [...document.querySelectorAll('.size-chip')].indexOf(sel);
-    if (idx === 1) url.searchParams.set('size', 'life');
-    if (idx === 2) url.searchParams.set('size', 'giant');
-    location.href = url.toString();
-  });
-}
-
-// ===========================================================================
-// 온보딩 1장 (D4 리서치 보완 ①) — 최초 방문에만 카메라 허용→바닥 비추기→캐릭터 등장
-// 3스텝을 안내한다. localStorage에 본 적 있으면 다시 띄우지 않는다.
-// ===========================================================================
-const ONBOARDING_SEEN_KEY = STORAGE_KEYS.onboardingSeen;
-function initOnboarding() {
-  const el = document.getElementById('onboarding');
-  document.getElementById('onboarding-title').textContent = CONFIG.onboarding.title;
-  document.getElementById('onboarding-steps').innerHTML = CONFIG.onboarding.steps.map((s) => `
-    <div class="onboarding-step">
-      <span class="onboarding-step-icon">${s.icon}</span>
-      <span class="onboarding-step-text">${s.text}</span>
-    </div>
-  `).join('');
-  const cta = document.getElementById('btn-onboarding-start');
-  cta.textContent = CONFIG.onboarding.cta;
-  cta.addEventListener('click', () => {
-    el.hidden = true;
-    try {
-      localStorage.setItem(ONBOARDING_SEEN_KEY, '1');
-    } catch {
-      // localStorage 불가 환경 — 다음 방문에도 다시 보이는 것으로 감수
-    }
-  }, { once: true });
-
-  let seen = false;
-  try {
-    seen = localStorage.getItem(ONBOARDING_SEEN_KEY) === '1';
-  } catch {
-    seen = false;
-  }
-  if (!seen && !KIOSK_MODE) el.hidden = false; // 무인 키오스크는 매 리셋마다 온보딩이 뜨면 방해되므로 생략
-}
-initOnboarding();
+bindLabels(CONFIG);
 
 // ===========================================================================
 // 구글 폼 직접 링크 (F3) — formId가 실제로 채워져 있을 때만 노출한다.
@@ -274,6 +93,31 @@ function showGoogleFormLinks(scopeEl) {
     } else {
       a.hidden = true;
     }
+  });
+}
+
+// ===========================================================================
+// D4 키오스크 모드 — ?kiosk=1: DONE(또는 에러) 화면 도달 후 무입력 상태가
+// CONFIG.kiosk.idleResetSec만큼 이어지면 다음 체험자를 위해 자동으로 처음 화면으로 되돌린다.
+// ===========================================================================
+let kioskArmed = false;
+let kioskTimer = null;
+
+function resetKioskTimer() {
+  if (!store.get('kiosk') || !kioskArmed) return;
+  clearTimeout(kioskTimer);
+  kioskTimer = setTimeout(() => location.reload(), scaledMs((CONFIG.kiosk.idleResetSec ?? 30) * 1000));
+}
+
+function armKioskReset() {
+  if (!store.get('kiosk')) return;
+  kioskArmed = true;
+  resetKioskTimer();
+}
+
+if (store.get('kiosk')) {
+  ['click', 'touchstart', 'pointerdown', 'keydown'].forEach((evt) => {
+    window.addEventListener(evt, resetKioskTimer, { passive: true });
   });
 }
 
@@ -313,143 +157,10 @@ async function submitAndRetry(answers, { onMessage, retryParent, onFail }) {
   }
 }
 
-// iOS 자이로 권한 — 반드시 사용자 제스처(버튼 탭) 안에서 1회 요청해 캐시한다.
-// 소환/Vision 인식처럼 타이머·콜백으로 오버레이에 진입하는 경로는 제스처가 아니라 요청이
-// 조용히 거부되고, 그 결과 시점 고정(화면 중앙 박제) 폴백으로 떨어진다(실기기 피드백 2026-07-20).
-let gyroGranted; // undefined = 미요청
-async function ensureGyroPermission() {
-  if (gyroGranted !== undefined) return gyroGranted;
-  try {
-    if (typeof DeviceOrientationEvent !== 'undefined'
-        && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      gyroGranted = (await DeviceOrientationEvent.requestPermission()) === 'granted';
-    } else {
-      gyroGranted = 'DeviceOrientationEvent' in window;
-    }
-  } catch {
-    gyroGranted = false;
-  }
-  return gyroGranted;
-}
-
-// 카메라 권한 프롬프트 대기 중 중복 탭으로 initOverlay가 두 번 실행되는 것 방지
-// (스트림·렌더러·리스너가 두 세트 생겨 리소스 누수)
-let overlayEntering = false;
-
-// 오버레이 진입 공통 흐름 — 시작 버튼과 카드 소환 전환이 함께 사용한다.
-async function startOverlayFlow() {
-  if (overlayEntering) return;
-  overlayEntering = true;
-  history.pushState({ ar: true }, ''); // 하드웨어 뒤로가기 → 홈 (사이트 이탈 방지)
-  document.getElementById('btn-home').hidden = false;
-  guide.begin();
-  const gyroOk = await ensureGyroPermission();
-  overlay = await initOverlay({
-    videoEl: document.getElementById('camera-video'),
-    canvasEl: document.getElementById('three-canvas'),
-    gyroAllowed: gyroOk,
-    // E2 매직미러: size/camera 파라미터가 있을 때만 옵션을 전달한다 — overlay.js가 아직
-    // 해당 옵션을 지원하지 않는 상태에서도(A팩 작업 중) 여분의 키는 무시되어 안전하다.
-    ...(characterHeight !== undefined && { characterHeight }),
-    ...(cameraFacingParam !== undefined && { cameraFacing: cameraFacingParam }),
-  });
-  guide.setScene(asScene(overlay));
-  {
-    const hintEl = document.getElementById('xr-hint');
-    let hintText = null;
-    if (!gyroOk) {
-      hintText = CONFIG.ui.gyroOffHint;
-    } else {
-      // 자이로가 켜져 있어도 위치(6DoF)는 추적 불가 — 최초 1회만 행동 유도 (걸어가면 밀려나는 한계 안내)
-      try {
-        if (!localStorage.getItem(STORAGE_KEYS.overlayLookHintSeen)) {
-          hintText = CONFIG.ui.overlayLookHint;
-          localStorage.setItem(STORAGE_KEYS.overlayLookHintSeen, '1');
-        }
-      } catch { /* localStorage 불가 — 힌트 생략 */ }
-    }
-    if (hintText) {
-      hintEl.textContent = hintText;
-      hintEl.hidden = false;
-      setTimeout(() => { hintEl.hidden = true; }, 5000);
-    }
-  }
-  // 최초 진입은 항상 라옹(환영 담당) — 단, ?char=로 화자가 고정된 경우 그 캐릭터
-  await guide.ensureCharacter(guide.speaker());
-  guide.renderGuide();
-
-  // WebXR hit-test 지원 기기(Android Chrome 등)에서만 "진짜 바닥에 소환" 버튼 노출.
-  // 미지원 기기(iOS 등)는 isXRSupported()가 false를 반환해 버튼이 계속 숨겨진 채 —
-  // 기존 자이로 오버레이 흐름과 완전히 동일하게 동작한다.
-  if (await isXRSupported()) {
-    document.getElementById('btn-xr').hidden = false;
-  } else if (supportsQuickLook()) {
-    // iOS: WebXR 대신 네이티브 AR Quick Look(진짜 6DoF 바닥 고정)으로 대칭을 맞춘다 (Task D)
-    document.getElementById('btn-quicklook').hidden = false;
-  }
-}
-
-// iOS Safari의 AR Quick Look 지원 감지 — rel="ar" 앵커를 지원하면 네이티브 ARKit 뷰어 사용 가능
-function supportsQuickLook() {
-  const a = document.createElement('a');
-  return a.relList && a.relList.supports && a.relList.supports('ar');
-}
-
-// 현재 화자의 .usdz를 AR Quick Look으로 연다. rel="ar" 앵커는 <img>가 유일한 자식이어야
-// 내비게이션 대신 Quick Look이 뜨므로, 보이는 버튼과 분리된 임시 앵커를 만들어 클릭한다.
-document.getElementById('btn-quicklook').addEventListener('click', () => {
-  sound.play('tap');
-  const key = guide.loadedCharacter().key || 'raong';
-  const a = document.createElement('a');
-  a.rel = 'ar';
-  a.href = `${import.meta.env.BASE_URL}usdz/${key}.usdz`;
-  a.appendChild(document.createElement('img'));
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-});
-
-document.getElementById('btn-overlay').addEventListener('click', startOverlayFlow);
-
-// 카드 하이브리드 플로우 — 마커 세션(캐릭터는 카드에 부착)을 살려둔 채 가이드·설문 UI(#screen-ar)만
-// 그 위에 얹는다. overlay 전용 요소(카메라 비디오·캔버스·기념사진)는 data-mode="marker-flow" CSS로 숨긴다.
-// guide의 activeScene은 NullScene(기본값) 유지 — ensureCharacter는 NullScene 비교로 조기 반환하고,
-// 모션·연출 호출은 NullScene의 no-op 메서드로 자연스럽게 흡수된다.
-function startMarkerFlow(key) {
-  history.pushState({ ar: true }, ''); // 하드웨어 뒤로가기 → 홈 (오버레이 플로우와 동일)
-  router.setMode('marker-flow');
-  guide.lockTo(key);
-  guide.begin();
-  guide.renderGuide();
-}
-
-// 🏠 홈 — AR/마커 어디서든 처음 화면으로. 카메라·세션을 정리하는 가장 안전한 방법은 reload.
-function goHome() {
-  try { guide.scene().stopCamera(); markerSession?.stop(); } catch { /* 정리 실패해도 리로드는 진행 */ }
-  location.reload();
-}
-{
-  const btnHome = document.getElementById('btn-home');
-  const btnHomeMarker = document.getElementById('btn-home-marker');
-  [btnHome, btnHomeMarker].forEach((b) => {
-    b.textContent = CONFIG.ui.btnHome;
-    b.setAttribute('aria-label', CONFIG.ui.btnHomeAria);
-    b.addEventListener('click', goHome);
-  });
-}
-// Android 하드웨어 뒤로가기: AR 진입 시 히스토리 한 칸을 쌓아 사이트 이탈 대신 홈으로
-window.addEventListener('popstate', () => { if (guide.screen() !== SCREENS.START) goHome(); });
-
 // ===========================================================================
-// F3 비AR 최후 폴백 — "카메라 없이 참여하기" (카메라·AR 없이도 참여 경로가 끊기지 않게)
+// F3 비AR 최후 폴백 — "카메라 없이 참여하기" (카메라·AR 없이도 참여 경로가 끊기지 않게).
+// btn-no-camera 자체의 라벨·클릭 배선은 start-screen.js가 onDirectSurvey로 이 함수를 받아 담당한다.
 // ===========================================================================
-const btnNoCamera = document.getElementById('btn-no-camera');
-btnNoCamera.textContent = CONFIG.noCameraLinkText;
-btnNoCamera.addEventListener('click', (e) => {
-  e.preventDefault();
-  startDirectSurvey();
-});
-
 function startDirectSurvey() {
   router.show('direct-survey');
 
@@ -481,242 +192,38 @@ document.getElementById('btn-direct-restart').addEventListener('click', () => {
   location.reload();
 });
 
-// 카드 마커 모드(MindAR) — cards.mind가 실제로 배포돼 있을 때만 버튼을 활성화한다.
-// (public/targets/cards.mind가 없으면 클릭해도 initMarker()의 addImageTargets가 실패해
-// 아래 catch에서 오버레이로 폴백하지만, 애초에 "준비 중" 배지를 그대로 두는 편이 UX상 낫다.)
-(async () => {
-  const btnMarker = document.getElementById('btn-marker');
-  try {
-    const res = await fetch(`${import.meta.env.BASE_URL}targets/cards.mind`, { method: 'HEAD' });
-    if (res.ok) {
-      btnMarker.disabled = false;
-      document.getElementById('btn-marker-badge').hidden = true;
-    }
-  } catch {
-    // 네트워크 오류 등 — 비활성 상태 유지
-  }
-})();
+// 오버레이·카드 소환·Vision 인식 3개 진입 플로우(카메라 권한·AR 세션·MindAR·Vision 인식)를
+// 소유하는 모듈(Task 10). entry.overlay()/entry.markerSession()은 goHome·재시작·WebXR 버튼이
+// "지금 붙어 있는 세션"을 참조하기 위한 접근자다.
+const entry = initEntry({ config: CONFIG, store, guide, router, sound, onDirectSurvey: startDirectSurvey });
 
-let markerSession = null;
+// 시작 화면(온보딩·캐릭터 카드·크기 칩·운영자 시트·언어·효과음 토글) + 모드 선택 버튼 배선(Task 10).
+initStartScreen({
+  config: CONFIG,
+  store,
+  sound,
+  onOverlay: entry.startOverlayFlow,
+  onMarker: entry.enterMarkerMode,
+  onVision: entry.enterVisionMode,
+  onDirectSurvey: startDirectSurvey,
+});
 
-document.getElementById('btn-marker').addEventListener('click', enterMarkerMode);
-
-// 중복 탭 시 MindARThree 인스턴스가 두 개 떠서 카메라를 경쟁하는 것 방지
-let markerEntering = false;
-
-// D1: mind-ar(무거운 의존성)는 카드 모드 버튼을 실제로 눌렀을 때만 로드한다 —
-// 초기 번들에서 분리되는 별도 청크이므로 로딩 중임을 버튼 상태로 보여준다.
-async function enterMarkerMode() {
-  if (markerEntering) return;
-  markerEntering = true;
-  ensureGyroPermission(); // 제스처 컨텍스트에서 선요청 — 소환 후 오버레이 전환 대비 (await 안 함: 프롬프트와 병행 진행)
-
-  const btnMarker = document.getElementById('btn-marker');
-  const labelEl = document.getElementById('btn-marker-label');
-  const labelBeforeLoad = labelEl.textContent;
-  btnMarker.disabled = true;
-  btnMarker.classList.add('btn-loading');
-  labelEl.textContent = CONFIG.ui.btnMarkerLoading;
-
-  let initMarker;
-  try {
-    ({ initMarker } = await import('./scenes/marker.js'));
-  } catch (err) {
-    console.warn('마커 모듈 로드 실패 — 준비 중 상태로 복귀', err);
-    labelEl.textContent = labelBeforeLoad;
-    btnMarker.classList.remove('btn-loading');
-    btnMarker.disabled = false;
-    markerEntering = false;
-    return;
-  }
-  btnMarker.classList.remove('btn-loading');
-  labelEl.textContent = labelBeforeLoad;
-
-  // #screen-start의 자식(.start-content)에 걸린 z-index:1이 #screen-start 자체는
-  // stacking context를 만들지 않아 body 최상위 레벨로 그대로 노출된다 — 그 결과 DOM 순서만으론
-  // #screen-marker(z-index:auto)가 절대 위로 못 올라온다. 그래서 router.show로 명시적으로 숨긴다
-  // (data-screen이 "marker"가 되면 #screen-start는 base section 규칙으로 되돌아가 display:none).
-  router.show('marker');
-  const hint = document.getElementById('marker-hint');
-  const fallbackBtn = document.getElementById('btn-marker-fallback');
-  hint.hidden = false;
-  fallbackBtn.hidden = true;
-
-  let found = false;
-
-  const fallbackTimer = setTimeout(() => {
-    if (!found) fallbackBtn.hidden = false;
-  }, scaledMs(30000));
-
-  function fallbackToOverlay() {
-    clearTimeout(fallbackTimer);
-    markerSession?.stop();
-    // #screen-marker를 별도로 숨기지 않는다 — btn-overlay 클릭이 동기적으로 startOverlayFlow의
-    // guide.begin()(flow.start()+syncScreen 내부 호출)까지 실행해(첫 await 이전) data-screen이
-    // 곧장 "guide"로 바뀌고, router CSS 규칙에 따라 #screen-marker는 자동으로 사라진다
-    // (중간에 리페인트가 끼어들 여지 없음).
-    document.getElementById('btn-overlay').click();
-  }
-
-  fallbackBtn.addEventListener('click', fallbackToOverlay, { once: true });
-
-  try {
-    markerSession = await initMarker({
-      containerEl: document.getElementById('marker-container'),
-      onTarget(key) {
-        if (found) return; // 첫 인식 카드가 소환 확정 — 이후 다른 카드 인식은 무시
-        found = true;
-        clearTimeout(fallbackTimer);
-        fallbackBtn.hidden = true;
-        // 소환 확정: 마커 세션을 유지한 채 진행한다 — 카드가 보이면 캐릭터가 카드에 딱 붙고(6DoF),
-        // 놓치면 화면에 남았다가 재인식 시 다시 붙는다(marker.js confirmSummon). 오버레이(3DoF)로
-        // 넘기던 이전 방식은 부착감을 잃어 폐기 (부착감 계획 Task A, 실기기 피드백 2026-07-20).
-        hint.hidden = false;
-        hint.textContent = CONFIG.ui.markerSummoned.replace('{name}', CONFIG.characters[key].name);
-        sound.play('twinkle');
-        markerSession?.confirmSummon(key);
-        setTimeout(() => {
-          hint.hidden = true;
-          startMarkerFlow(key);
-        }, 1600);
-      },
-      // 소환 확정 후 트래킹 상태 전환 알림 — 카드를 놓치면 재부착 방법 힌트를 잠깐 보여준다
-      onHoldChange(tracked) {
-        if (!found) return;
-        if (tracked) {
-          hint.hidden = true;
-        } else {
-          hint.textContent = CONFIG.ui.markerLostHint;
-          hint.hidden = false;
-          setTimeout(() => { hint.hidden = true; }, 3000);
-        }
-      },
-    });
-  } catch (err) {
-    console.warn('마커 모드 초기화 실패 — 오버레이로 폴백', err);
-    fallbackToOverlay();
-  }
+// 🏠 홈 — AR/마커 어디서든 처음 화면으로. 카메라·세션을 정리하는 가장 안전한 방법은 reload.
+function goHome() {
+  try { guide.scene().stopCamera(); entry.markerSession()?.stop(); } catch { /* 정리 실패해도 리로드는 진행 */ }
+  location.reload();
 }
-
-// ===========================================================================
-// Vision AI 인식 모드 — 카메라로 캐릭터(카드·그림)를 알아보고 안내를 시작한다.
-// scenes/vision.js는 렌더링을 직접 하지 않고 "인식"만 담당한다 — 확정되면 자신의 카메라·
-// classifier를 정리한 뒤 onRecognized(key)만 알려주고, 실제 AR 안내는 검증된 오버레이 모드
-// (btn-overlay 클릭 핸들러)로 그대로 이어받는다. 그래서 여기서는 마커 모드처럼 guide의 씬에
-// 연결하지 않는다 — 화면 전환 이후엔 overlay가 guide.setScene()으로 스스로 채운다.
-// 1단계 기준: 인식된 라벨↔캐릭터 고정 연결은 3단계에서 추가한다(현재는 표준 오버레이 흐름 진입).
-// ===========================================================================
-let visionSession = null;
-
-document.getElementById('btn-vision').addEventListener('click', enterVisionMode);
-
-// 중복 탭 시 getUserMedia 스트림이 두 개 떠서 카메라를 경쟁하는 것 방지 (마커 모드와 동일한 가드)
-let visionEntering = false;
-
-async function enterVisionMode() {
-  if (visionEntering) return;
-  ensureGyroPermission(); // 제스처 컨텍스트 선요청 — 인식 후 오버레이 전환 대비
-  visionEntering = true;
-
-  const btnVision = document.getElementById('btn-vision');
-  const labelEl = document.getElementById('btn-vision-label');
-  const labelBeforeLoad = labelEl.textContent;
-  btnVision.disabled = true;
-  btnVision.classList.add('btn-loading');
-  labelEl.textContent = CONFIG.ui.visionLoadingLabel;
-
-  let initVision;
-  try {
-    ({ initVision } = await import('./scenes/vision.js'));
-  } catch (err) {
-    console.warn('비전 모듈 로드 실패 — 시작 화면으로 복귀', err);
-    labelEl.textContent = labelBeforeLoad;
-    btnVision.classList.remove('btn-loading');
-    btnVision.disabled = false;
-    visionEntering = false;
-    return;
-  }
-  btnVision.classList.remove('btn-loading');
-  labelEl.textContent = labelBeforeLoad;
-
-  router.show('vision');
-  const hint = document.getElementById('vision-hint');
-  const errorPanel = document.getElementById('vision-error');
-  const backBtn = document.getElementById('btn-vision-back');
-  hint.hidden = false;
-  errorPanel.hidden = true;
-
-  // 4단계(모델 로딩 중 화면 이탈): initVision()이 아직 카메라·WASM·모델을 로딩하는 도중에도
-  // 뒤로가기로 빠져나갈 수 있어야 한다. aborted는 "이 화면을 이미 벗어났다"는 표시로, 뒤늦게
-  // onRecognized/onError가 호출되거나 initVision()이 뒤늦게 resolve돼도 무시하고 즉시 정리한다.
-  let aborted = false;
-
-  function showVisionError() {
-    hint.hidden = true;
-    errorPanel.hidden = false;
-  }
-
-  function exitVisionScreen() {
-    visionSession?.stop();
-    visionSession = null;
-    // #screen-vision을 별도로 숨기지 않는다 — 아래 세 호출부 모두 exitVisionScreen() 직후
-    // 동기적으로(첫 await 이전) router.show()를 거치는 다음 화면 전환을 실행해 data-screen이
-    // 곧장 바뀌고, router CSS 규칙에 따라 #screen-vision은 자동으로 사라진다.
-  }
-
-  backBtn.addEventListener('click', () => {
-    aborted = true;
-    visionSession?.stop();
-    // 다른 모든 "처음으로" 동작(btn-restart 등)과 동일하게 전체 리로드로 되돌아간다 —
-    // 진행 중이던 getUserMedia·WASM 로딩·타이머까지 확실하게 정리되는 가장 안전한 방법이다.
-    location.reload();
-  }, { once: true });
-
-  document.getElementById('btn-vision-fallback-overlay').addEventListener('click', () => {
-    exitVisionScreen();
-    document.getElementById('btn-overlay').click();
-  }, { once: true });
-  document.getElementById('btn-vision-fallback-survey').addEventListener('click', () => {
-    exitVisionScreen();
-    startDirectSurvey();
-  }, { once: true });
-
-  try {
-    const session = await initVision({
-      containerEl: document.getElementById('vision-container'),
-      // E2 매직미러(?camera=user)에서도 스캔 카메라가 이후 오버레이와 같은 방향을 보게 한다.
-      ...(cameraFacingParam !== undefined && { cameraFacing: cameraFacingParam }),
-      onRecognized(key) {
-        if (aborted) return; // 이미 화면을 벗어남 — 세션은 아래 finally 격 로직에서 정리된다
-        // 3단계: 인식된 캐릭터(raong/raoni/raona)로 안내 전체 화자를 고정한다 — ?char=와 동일한
-        // 공통 함수(solo-character.js)를 guide.lockTo 내부에서 재사용. flow.start() 이전(가이드
-        // 시작 전)이라 안전하게 통째로 재생성할 수 있다. key가 'unknown'이거나 미등록 값이면
-        // (정상 경로에서는 발생하지 않지만 방어적으로) buildSoloGuideScript가 원본 릴레이
-        // guideScript를 그대로 반환한다.
-        guide.lockTo(key);
-        exitVisionScreen();
-        document.getElementById('btn-overlay').click();
-      },
-      onError(err) {
-        if (aborted) return;
-        console.warn('비전 인식 실패 — 폴백 안내 노출', err);
-        showVisionError();
-      },
-    });
-    if (aborted) {
-      session?.stop(); // 로딩 도중 뒤로가기를 눌렀다면 방금 막 만들어진 세션(카메라 등)을 즉시 정리
-    } else {
-      visionSession = session;
-    }
-  } catch (err) {
-    if (!aborted) {
-      console.warn('비전 모드 초기화 실패 — 폴백 안내 노출', err);
-      showVisionError();
-    }
-  }
-
-  visionEntering = false;
+{
+  const btnHome = document.getElementById('btn-home');
+  const btnHomeMarker = document.getElementById('btn-home-marker');
+  [btnHome, btnHomeMarker].forEach((b) => {
+    b.textContent = CONFIG.ui.btnHome;
+    b.setAttribute('aria-label', CONFIG.ui.btnHomeAria);
+    b.addEventListener('click', goHome);
+  });
 }
+// Android 하드웨어 뒤로가기: AR 진입 시 히스토리 한 칸을 쌓아 사이트 이탈 대신 홈으로
+window.addEventListener('popstate', () => { if (guide.screen() !== SCREENS.START) goHome(); });
 
 // AR 설문 제출 래퍼 — guide.startSurvey는 onMessage만 넘겨준다. retryParent/onFail은 main.js
 // 전용 DOM(#screen-ar·btn-restart)과 키오스크 상태라 여기서 감싸 채운다(원본 startSurvey의
@@ -771,37 +278,12 @@ document.getElementById('btn-capture').addEventListener('click', async () => {
 
 document.getElementById('btn-restart').addEventListener('click', () => {
   guide.scene().stopCamera(); // 리셋 직전 카메라 스트림 해제
-  markerSession?.stop(); // 마커 플로우로 완주한 경우의 카메라 해제 (goHome과 동일)
+  entry.markerSession()?.stop(); // 마커 플로우로 완주한 경우의 카메라 해제 (goHome과 동일)
   location.reload();
 });
 document.getElementById('btn-error-restart').addEventListener('click', () => {
   location.reload();
 });
-
-// ===========================================================================
-// D4 키오스크 모드 — ?kiosk=1: DONE(또는 에러) 화면 도달 후 무입력 상태가
-// CONFIG.kiosk.idleResetSec만큼 이어지면 다음 체험자를 위해 자동으로 처음 화면으로 되돌린다.
-// ===========================================================================
-let kioskArmed = false;
-let kioskTimer = null;
-
-function resetKioskTimer() {
-  if (!KIOSK_MODE || !kioskArmed) return;
-  clearTimeout(kioskTimer);
-  kioskTimer = setTimeout(() => location.reload(), scaledMs((CONFIG.kiosk.idleResetSec ?? 30) * 1000));
-}
-
-function armKioskReset() {
-  if (!KIOSK_MODE) return;
-  kioskArmed = true;
-  resetKioskTimer();
-}
-
-if (KIOSK_MODE) {
-  ['click', 'touchstart', 'pointerdown', 'keydown'].forEach((evt) => {
-    window.addEventListener(evt, resetKioskTimer, { passive: true });
-  });
-}
 
 // ===========================================================================
 // D: public/sw.js 오프라인 자산 캐시 등록 — 실패해도 무해(캐시 없이 기존처럼 동작).
@@ -814,7 +296,7 @@ if ('serviceWorker' in navigator) {
 
 // ===========================================================================
 // WebXR hit-test 바닥인식 모드 (Android Chrome, 베타) — agent/webxr-hittest
-// isXRSupported() 체크·#btn-xr 노출은 위 btn-overlay 핸들러 안에서 처리한다.
+// isXRSupported() 체크·#btn-xr 노출은 entry.js의 startOverlayFlow 안에서 처리한다.
 // 여기서는 진입/종료 전환만 담당 — 다른 씬 로직(자이로 오버레이·설문)은 건드리지 않는다.
 // ===========================================================================
 const btnXR = document.getElementById('btn-xr');
@@ -827,13 +309,14 @@ function hideXRHint() {
 }
 
 btnXR.addEventListener('click', async () => {
+  const overlay = entry.overlay();
   if (!overlay) return;
   btnXR.disabled = true;
 
   const xr = await startXR({
     character: guide.loadedCharacter().model,
     overlayRoot: document.getElementById('screen-ar'),
-    ...(characterHeight !== undefined && { characterHeight }),
+    ...(store.get('characterHeight') !== undefined && { characterHeight: store.get('characterHeight') }),
     // renderer.xr.setSession()은 실제 비동기 작업이라 await 뒤에서 모드를 전환하면 그 사이
     // 리페인트가 끼어들어 XR 캔버스와 기존 2D 오버레이가 함께 보이는 이중 노출/깜빡임이
     // 생길 수 있다 — scenes/webxr.js가 appendChild 이전(세션 end 리스너 등록 직후) 시점에
@@ -874,6 +357,20 @@ btnXR.addEventListener('click', async () => {
   // 15초 안에 바닥(레티클)이 잡히지 않으면 친절한 안내 문구 노출 (리서치 보완 ①·②)
   xrHint.textContent = CONFIG.trackingHints.xrReticle;
   xrHintTimer = setTimeout(() => { xrHint.hidden = false; }, 15000);
+});
+
+// 현재 화자의 .usdz를 AR Quick Look으로 연다. rel="ar" 앵커는 <img>가 유일한 자식이어야
+// 내비게이션 대신 Quick Look이 뜨므로, 보이는 버튼과 분리된 임시 앵커를 만들어 클릭한다.
+document.getElementById('btn-quicklook').addEventListener('click', () => {
+  sound.play('tap');
+  const key = guide.loadedCharacter().key || 'raong';
+  const a = document.createElement('a');
+  a.rel = 'ar';
+  a.href = `${import.meta.env.BASE_URL}usdz/${key}.usdz`;
+  a.appendChild(document.createElement('img'));
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 });
 // ===========================================================================
 

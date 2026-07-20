@@ -12,6 +12,9 @@ import { NullScene } from './scenes.js';
 export function createGuide({ config, router, sound, showLine, loadCharacter, buildSoloGuideScript, dom }) {
   let lockedCharacter = null; // 원본 main.js의 guideSpeakerLock
   let flow = createFlow(config.guideScript);
+  // flow가 현재 표현하는 캐릭터 키(또는 릴레이면 null) — lockTo()가 갱신한다. begin()이 flow를
+  // 다시 만들지 그대로 쓸지 판단하는 용도로만 쓴다(아래 begin() 주석 참조. 리뷰 Minor 반영).
+  let flowFor = null;
 
   // 현재 캐릭터 배턴터치 호출을 받는 활성 씬 — 기본은 NullScene. main.js가 오버레이/WebXR
   // 진입 시 setScene()으로 교체한다.
@@ -73,17 +76,33 @@ export function createGuide({ config, router, sound, showLine, loadCharacter, bu
   function lockTo(charKey) {
     if (config.characters?.[charKey]) lockedCharacter = charKey;
     flow = createFlow(buildSoloGuideScript(charKey, config));
+    // buildSoloGuideScript(charKey)는 charKey가 무효(또는 조립 결과가 빔)면 config.guideScript를
+    // 그대로 반환한다(solo-character.js) — 그 경우 flow는 사실상 "릴레이" 상태이므로 flowFor를
+    // charKey가 아니라 null로 남겨 lockedCharacter(무효 키면 이전 값 유지)와의 비교가 항상
+    // 안전하게 성립하도록 한다.
+    flowFor = config.characters?.[charKey] ? charKey : null;
   }
 
-  // 릴레이(또는 사전 고정된) 대본으로 flow를 새로 만들고 시작해 화면을 guide로 전환한다.
-  // renderGuide()는 여기서 호출하지 않는다 — 오버레이 진입 경로는 activeScene이 아직
-  // NullScene인 이 시점과 캐릭터 로딩이 끝난 시점 사이에 실제 시간차가 있어(카메라 권한 등),
-  // 원본처럼 ensureCharacter 완료 후에 별도로 renderGuide()를 불러야 로딩 문구가 실제 대사를
-  // 덮어쓰는 순서 역전이 생기지 않는다(마커 플로우처럼 즉시 렌더가 필요한 경우는 호출부가
-  // begin() 직후 renderGuide()를 이어서 부른다).
+  // 릴레이(또는 사전 고정된) 대본으로 flow를 시작해 화면을 guide로 전환한다. renderGuide()는
+  // 여기서 호출하지 않는다 — 오버레이 진입 경로는 activeScene이 아직 NullScene인 이 시점과
+  // 캐릭터 로딩이 끝난 시점 사이에 실제 시간차가 있어(카메라 권한 등), 원본처럼 ensureCharacter
+  // 완료 후에 별도로 renderGuide()를 불러야 로딩 문구가 실제 대사를 덮어쓰는 순서 역전이 생기지
+  // 않는다(마커 플로우처럼 즉시 렌더가 필요한 경우는 호출부가 begin() 직후 renderGuide()를
+  // 이어서 부른다).
+  //
+  // flow 재생성 최소화(Task 9 리뷰 Minor) — main.js 부트스트랩은 항상 lockTo()를 먼저 호출해
+  // 두므로(초기 ?char= 판정 포함, 카드 소환·Vision 인식도 begin() 전에 lockTo()를 부른다),
+  // flowFor가 lockedCharacter와 이미 일치하면 그 lockTo()가 만든 flow가 곧 begin()이 만들 결과와
+  // 100% 같다 — 다시 만들지 않고 그대로 쓴다. lockTo()가 한 번도 호출되지 않은 경우(예:
+  // test/guide.test.js가 begin()을 바로 호출)는 flowFor(null)와 lockedCharacter(null)가 우연히
+  // 같아 이 조건을 타지만, 그때 flow는 생성자 기본값(config.guideScript)이라 재생성 결과와
+  // 동일해 안전하다.
   function begin() {
-    const script = lockedCharacter ? buildSoloGuideScript(lockedCharacter, config) : config.guideScript;
-    flow = createFlow(script);
+    if (flowFor !== lockedCharacter) {
+      const script = lockedCharacter ? buildSoloGuideScript(lockedCharacter, config) : config.guideScript;
+      flow = createFlow(script);
+      flowFor = lockedCharacter;
+    }
     flow.start();
     syncScreen();
   }
