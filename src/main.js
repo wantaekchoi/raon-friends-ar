@@ -1,6 +1,6 @@
 import './style.css';
 import { CONFIG, SURVEY_QUESTIONS, GOOGLE_FORM } from './config.js';
-import { createFlow, SCREENS } from './flow.js';
+import { SCREENS } from './flow.js';
 import { initOverlay } from './scenes/overlay.js';
 import { isXRSupported, startXR } from './scenes/webxr.js';
 import { showLine } from './ui/bubble.js';
@@ -13,7 +13,8 @@ import { buildSoloGuideScript } from './solo-character.js';
 import { scaledMs } from './app/timing.js';
 import { STORAGE_KEYS } from './app/storage-keys.js';
 import { createRouter } from './app/router.js';
-import { asScene, NullScene } from './app/scenes.js';
+import { asScene } from './app/scenes.js';
+import { createGuide } from './app/guide.js';
 
 // F1 다국어 — html lang·문서 제목을 현재 언어에 맞춘다 (CONFIG.lang은 config.js가 모듈 로드
 // 시점에 currentLang()으로 이미 판별해 둔 값).
@@ -59,7 +60,7 @@ function showErrorScreen(err) {
   if (errorScreenShown) return; // 중복 표시 방지(같은 에러가 반복 발생해도 화면은 1회만)
   errorScreenShown = true;
   try {
-    activeScene.stopCamera(); // 크래시 상황에서도 카메라 스트림은 반드시 해제
+    guide.scene().stopCamera(); // 크래시 상황에서도 카메라 스트림은 반드시 해제
   } catch {
     // stopCamera 자체가 실패해도 에러 화면 노출은 계속 진행
   }
@@ -83,65 +84,32 @@ const sizeParam = urlParams.get('size');
 let characterHeight = SIZE_HEIGHTS[sizeParam]; // 매칭 안 되면 undefined(기본 크기). 시작 화면 크기 칩이 덮어쓸 수 있다.
 const cameraFacingParam = urlParams.get('camera') === 'user' ? 'user' : undefined;
 
-// ?char=raoni처럼 유효한 캐릭터 키가 주어지면 배턴터치 없이 그 캐릭터가 안내 전체를 단독 진행한다.
-// (soloIntro + 정체성 중립 soloGuideLines로 대본을 새로 조립 — solo-character.js의 공통 로직.
-// 카드 소환·Vision AI 인식 성공 시에도 동일한 함수를 쓴다.)
-// 단독 진행으로 고정된 캐릭터 — 설문·완료 단계 화자도 이 캐릭터가 승계한다(없으면 기본 라오나).
-// 카드 소환·Vision 경로가 진입 시점에 설정하고, ?char=는 아래에서 즉시 설정한다.
-let guideSpeakerLock = null;
-const guideScript = buildSoloGuideScript(soloCharParam, CONFIG);
-if (soloCharParam && CONFIG.characters[soloCharParam]) guideSpeakerLock = soloCharParam;
-
 // 화면·모드 전환의 단일 소유자(셸 재작성 스펙 §2) — 이 파일 안에서 data-screen/data-mode를
 // 직접 만지거나 인라인 style로 화면을 토글하지 않는다. 전부 router를 거친다.
 const router = createRouter(document.body);
 
-// Vision AI 인식으로 화자가 새로 고정되면 flow 자체를 새로 만들어 교체한다(가이드 시작 전에만
-// 일어나므로 진행 중인 상태를 끊을 위험이 없다) — 그래서 const가 아니라 let이다.
-let flow = createFlow(guideScript);
+// 안내·설문 진행 전체(flow·화자 고정·캐릭터 로딩 캐시·3D 씬 참조)를 소유하는 모듈(Task 9).
+// main.js는 이 인스턴스가 제공하는 메서드로만 진행 상태를 다룬다.
+const guide = createGuide({
+  config: CONFIG,
+  router,
+  sound,
+  showLine,
+  loadCharacter,
+  buildSoloGuideScript,
+  dom: {
+    nextBtn: document.getElementById('btn-next'),
+    surveyPanel: document.getElementById('survey-panel'),
+    donePanel: document.getElementById('done-panel'),
+  },
+});
+// ?char=raoni처럼 유효한 캐릭터 키가 주어지면 배턴터치 없이 그 캐릭터가 안내 전체를 단독
+// 진행한다(soloIntro + 정체성 중립 soloGuideLines로 대본을 새로 조립 — solo-character.js의
+// 공통 로직. 카드 소환·Vision AI 인식 성공 시에도 동일한 함수를 쓴다). 유효하지 않은 키는
+// guide.lockTo 내부에서 조용히 무시된다.
+guide.lockTo(soloCharParam);
+
 let overlay = null;
-// 현재 캐릭터 배턴터치 호출을 받는 활성 씬 — 기본은 NullScene(전 메서드 no-op), 오버레이/
-// WebXR 진입 시 app/scenes.js의 asScene()으로 감싸 교체한다. 모든 씬이 SCENE_METHODS를
-// 동일하게 노출하므로 호출부는 `?.` 가드 없이 이 변수만 바라보면 된다.
-let activeScene = NullScene;
-
-// 캐릭터 배턴터치: 최초 필요 시점에만 로드하고 이후엔 캐시에서 재사용한다.
-const characterCache = new Map();
-let currentSpeaker = null;
-let characterLoading = false;
-
-// speaker가 currentSpeaker와 다를 때만 로드/전환한다. 로드 중 중복 클릭 방지를 위해
-// characterLoading 플래그로 btn-next를 잠근다.
-async function ensureCharacter(speaker) {
-  if (activeScene === NullScene || speaker === currentSpeaker) return;
-
-  characterLoading = true;
-  const nextBtn = document.getElementById('btn-next');
-  nextBtn.disabled = true;
-
-  let model = characterCache.get(speaker);
-  if (!model) {
-    // 행사장 네트워크에서 fbx 로딩이 길어질 수 있음 — 무응답처럼 보이지 않게 대기 문구 표시
-    showLine({ speaker, text: CONFIG.ui.characterLoading });
-    model = await loadCharacter(speaker);
-    if (model) characterCache.set(speaker, model);
-  }
-  if (model) {
-    activeScene.setCharacter(model);
-    activeScene.playEntrance();
-    sound.play('pop'); // 등장 효과음
-    // 등장 바운스(700ms)가 끝난 직후 손 흔들며 인사 (XR 컨트롤러엔 모션 API가 없을 수 있음).
-    // 800ms 사이 씬이 전환됐으면 발화하지 않는다 — 엉뚱한 씬에 wave가 걸리는 것 방지.
-    const sceneAtLoad = activeScene;
-    setTimeout(() => {
-      if (sceneAtLoad === activeScene) sceneAtLoad.playMotion('wave');
-    }, 800);
-  }
-
-  currentSpeaker = speaker;
-  characterLoading = false;
-  nextBtn.disabled = false;
-}
 
 document.getElementById('start-title').textContent = CONFIG.title;
 document.getElementById('start-subtitle').textContent = CONFIG.ui.startSubtitle;
@@ -251,10 +219,6 @@ document.querySelectorAll('#start-chars .char-card').forEach((card) => {
     if (idx === 2) url.searchParams.set('size', 'giant');
     location.href = url.toString();
   });
-}
-
-function syncScreen() {
-  router.show(flow.screen);
 }
 
 // ===========================================================================
@@ -378,8 +342,7 @@ async function startOverlayFlow() {
   overlayEntering = true;
   history.pushState({ ar: true }, ''); // 하드웨어 뒤로가기 → 홈 (사이트 이탈 방지)
   document.getElementById('btn-home').hidden = false;
-  flow.start();
-  syncScreen();
+  guide.begin();
   const gyroOk = await ensureGyroPermission();
   overlay = await initOverlay({
     videoEl: document.getElementById('camera-video'),
@@ -390,7 +353,7 @@ async function startOverlayFlow() {
     ...(characterHeight !== undefined && { characterHeight }),
     ...(cameraFacingParam !== undefined && { cameraFacing: cameraFacingParam }),
   });
-  activeScene = asScene(overlay);
+  guide.setScene(asScene(overlay));
   {
     const hintEl = document.getElementById('xr-hint');
     let hintText = null;
@@ -412,8 +375,8 @@ async function startOverlayFlow() {
     }
   }
   // 최초 진입은 항상 라옹(환영 담당) — 단, ?char=로 화자가 고정된 경우 그 캐릭터
-  await ensureCharacter(flow.line.speaker);
-  renderGuide();
+  await guide.ensureCharacter(guide.speaker());
+  guide.renderGuide();
 
   // WebXR hit-test 지원 기기(Android Chrome 등)에서만 "진짜 바닥에 소환" 버튼 노출.
   // 미지원 기기(iOS 등)는 isXRSupported()가 false를 반환해 버튼이 계속 숨겨진 채 —
@@ -436,7 +399,7 @@ function supportsQuickLook() {
 // 내비게이션 대신 Quick Look이 뜨므로, 보이는 버튼과 분리된 임시 앵커를 만들어 클릭한다.
 document.getElementById('btn-quicklook').addEventListener('click', () => {
   sound.play('tap');
-  const key = currentSpeaker || 'raong';
+  const key = guide.loadedCharacter().key || 'raong';
   const a = document.createElement('a');
   a.rel = 'ar';
   a.href = `${import.meta.env.BASE_URL}usdz/${key}.usdz`;
@@ -450,21 +413,19 @@ document.getElementById('btn-overlay').addEventListener('click', startOverlayFlo
 
 // 카드 하이브리드 플로우 — 마커 세션(캐릭터는 카드에 부착)을 살려둔 채 가이드·설문 UI(#screen-ar)만
 // 그 위에 얹는다. overlay 전용 요소(카메라 비디오·캔버스·기념사진)는 data-mode="marker-flow" CSS로 숨긴다.
-// activeScene은 NullScene(기본값) 유지 — ensureCharacter는 NullScene 비교로 조기 반환하고,
+// guide의 activeScene은 NullScene(기본값) 유지 — ensureCharacter는 NullScene 비교로 조기 반환하고,
 // 모션·연출 호출은 NullScene의 no-op 메서드로 자연스럽게 흡수된다.
 function startMarkerFlow(key) {
   history.pushState({ ar: true }, ''); // 하드웨어 뒤로가기 → 홈 (오버레이 플로우와 동일)
   router.setMode('marker-flow');
-  guideSpeakerLock = key;
-  flow = createFlow(buildSoloGuideScript(key, CONFIG));
-  flow.start();
-  syncScreen();
-  renderGuide();
+  guide.lockTo(key);
+  guide.begin();
+  guide.renderGuide();
 }
 
 // 🏠 홈 — AR/마커 어디서든 처음 화면으로. 카메라·세션을 정리하는 가장 안전한 방법은 reload.
 function goHome() {
-  try { activeScene.stopCamera(); markerSession?.stop(); } catch { /* 정리 실패해도 리로드는 진행 */ }
+  try { guide.scene().stopCamera(); markerSession?.stop(); } catch { /* 정리 실패해도 리로드는 진행 */ }
   location.reload();
 }
 {
@@ -477,7 +438,7 @@ function goHome() {
   });
 }
 // Android 하드웨어 뒤로가기: AR 진입 시 히스토리 한 칸을 쌓아 사이트 이탈 대신 홈으로
-window.addEventListener('popstate', () => { if (flow.screen !== SCREENS.START) goHome(); });
+window.addEventListener('popstate', () => { if (guide.screen() !== SCREENS.START) goHome(); });
 
 // ===========================================================================
 // F3 비AR 최후 폴백 — "카메라 없이 참여하기" (카메라·AR 없이도 참여 경로가 끊기지 않게)
@@ -513,7 +474,7 @@ function startDirectSurvey() {
     doneEl.querySelector('.direct-done-message').textContent = CONFIG.ui.doneMessage;
     document.getElementById('btn-direct-restart').hidden = false;
     armKioskReset();
-  }, { ...reactionsFor(), lang: CONFIG.lang });
+  }, { ...guide.reactionsFor(), lang: CONFIG.lang });
 }
 
 document.getElementById('btn-direct-restart').addEventListener('click', () => {
@@ -591,8 +552,9 @@ async function enterMarkerMode() {
     clearTimeout(fallbackTimer);
     markerSession?.stop();
     // #screen-marker를 별도로 숨기지 않는다 — btn-overlay 클릭이 동기적으로 startOverlayFlow의
-    // flow.start()/syncScreen()까지 실행해(첫 await 이전) data-screen이 곧장 "guide"로 바뀌고,
-    // router CSS 규칙에 따라 #screen-marker는 자동으로 사라진다(중간에 리페인트가 끼어들 여지 없음).
+    // guide.begin()(flow.start()+syncScreen 내부 호출)까지 실행해(첫 await 이전) data-screen이
+    // 곧장 "guide"로 바뀌고, router CSS 규칙에 따라 #screen-marker는 자동으로 사라진다
+    // (중간에 리페인트가 끼어들 여지 없음).
     document.getElementById('btn-overlay').click();
   }
 
@@ -640,8 +602,8 @@ async function enterMarkerMode() {
 // Vision AI 인식 모드 — 카메라로 캐릭터(카드·그림)를 알아보고 안내를 시작한다.
 // scenes/vision.js는 렌더링을 직접 하지 않고 "인식"만 담당한다 — 확정되면 자신의 카메라·
 // classifier를 정리한 뒤 onRecognized(key)만 알려주고, 실제 AR 안내는 검증된 오버레이 모드
-// (btn-overlay 클릭 핸들러)로 그대로 이어받는다. 그래서 여기서는 마커 모드처럼 activeScene에
-// 연결하지 않는다 — 화면 전환 이후엔 overlay가 activeScene을 스스로 채운다.
+// (btn-overlay 클릭 핸들러)로 그대로 이어받는다. 그래서 여기서는 마커 모드처럼 guide의 씬에
+// 연결하지 않는다 — 화면 전환 이후엔 overlay가 guide.setScene()으로 스스로 채운다.
 // 1단계 기준: 인식된 라벨↔캐릭터 고정 연결은 3단계에서 추가한다(현재는 표준 오버레이 흐름 진입).
 // ===========================================================================
 let visionSession = null;
@@ -727,11 +689,11 @@ async function enterVisionMode() {
       onRecognized(key) {
         if (aborted) return; // 이미 화면을 벗어남 — 세션은 아래 finally 격 로직에서 정리된다
         // 3단계: 인식된 캐릭터(raong/raoni/raona)로 안내 전체 화자를 고정한다 — ?char=와 동일한
-        // 공통 함수(solo-character.js)를 재사용. flow.start() 이전(가이드 시작 전)이라 안전하게
-        // 통째로 재생성할 수 있다. key가 'unknown'이거나 미등록 값이면(정상 경로에서는 발생하지
-        // 않지만 방어적으로) buildSoloGuideScript가 원본 릴레이 guideScript를 그대로 반환한다.
-        guideSpeakerLock = key;
-        flow = createFlow(buildSoloGuideScript(key, CONFIG));
+        // 공통 함수(solo-character.js)를 guide.lockTo 내부에서 재사용. flow.start() 이전(가이드
+        // 시작 전)이라 안전하게 통째로 재생성할 수 있다. key가 'unknown'이거나 미등록 값이면
+        // (정상 경로에서는 발생하지 않지만 방어적으로) buildSoloGuideScript가 원본 릴레이
+        // guideScript를 그대로 반환한다.
+        guide.lockTo(key);
         exitVisionScreen();
         document.getElementById('btn-overlay').click();
       },
@@ -756,83 +718,45 @@ async function enterVisionMode() {
   visionEntering = false;
 }
 
-function renderGuide() {
-  if (flow.screen !== SCREENS.GUIDE) return;
-  showLine(flow.line);
-  document.getElementById('btn-next').hidden = false;
+// AR 설문 제출 래퍼 — guide.startSurvey는 onMessage만 넘겨준다. retryParent/onFail은 main.js
+// 전용 DOM(#screen-ar·btn-restart)과 키오스크 상태라 여기서 감싸 채운다(원본 startSurvey의
+// submitAndRetry 호출부와 동일한 retryParent/onFail).
+function guideSubmitAndRetry(answers, { onMessage }) {
+  return submitAndRetry(answers, {
+    onMessage,
+    retryParent: document.getElementById('screen-ar'),
+    onFail: () => {
+      document.getElementById('btn-restart').hidden = false;
+      armKioskReset();
+    },
+  });
 }
 
-document.getElementById('btn-next').addEventListener('click', async () => {
-  if (characterLoading) return;
-  sound.play('tap');
-  flow.next();
-  syncScreen();
-  if (flow.screen === SCREENS.GUIDE) {
-    await ensureCharacter(flow.line.speaker);
-    renderGuide();
-  } else if (flow.screen === SCREENS.SURVEY) {
-    document.getElementById('btn-next').hidden = true;
-    startSurvey();
-  }
-});
-
-async function startSurvey() {
-  const surveySpeaker = guideSpeakerLock ?? 'raona'; // 기본은 라오나, 단독 진행이면 그 캐릭터가 승계
-  await ensureCharacter(surveySpeaker);
-  showLine({ speaker: surveySpeaker, text: CONFIG.ui.surveyBubbleText });
-  const panel = document.getElementById('survey-panel');
-  panel.hidden = false;
-  renderSurvey(panel, SURVEY_QUESTIONS, async (answers) => {
-    panel.hidden = true;
+// guide.startSurvey에 매번 넘기는 핸들러 묶음 — 원본 startSurvey 안에 있던 main.js 전용 DOM
+// 조작(구글폼 폴백 링크·캡처 버튼·재시작 버튼·키오스크 타이머)을 그대로 보존한다.
+const surveyHandlers = {
+  submitAndRetry: guideSubmitAndRetry,
+  renderSurvey,
+  questions: SURVEY_QUESTIONS,
+  // 설문 제출 직후(전송 성공 여부와 무관) — 완료 화면의 폼 링크는 "또 해야 하나?" 혼란을 막기
+  // 위해 폴백용임을 명시하는 문구로 교체하고, 캡처 버튼을 노출한다(원본 startSurvey와 동일 시점).
+  onRevealDone: () => {
     const donePanel = document.getElementById('done-panel');
-    donePanel.hidden = false;
     showGoogleFormLinks(donePanel);
-    // 완료 화면의 폼 링크는 "또 해야 하나?" 혼란을 막기 위해 폴백용임을 명시하는 문구로 교체
     const doneFormLink = donePanel.querySelector('.google-form-link');
     if (doneFormLink) doneFormLink.textContent = CONFIG.ui.googleFormLinkFallback;
     document.getElementById('btn-capture').hidden = false;
-
-    await submitAndRetry(answers, {
-      onMessage: (text) => showLine({ speaker: surveySpeaker, text }),
-      retryParent: document.getElementById('screen-ar'),
-      onFail: () => {
-        document.getElementById('btn-restart').hidden = false;
-        armKioskReset();
-      },
-    });
-
-    flow.finishSurvey();
-    syncScreen();
-    await ensureCharacter(surveySpeaker); // 완료 화면도 진행 캐릭터가 인사
-    showLine({ speaker: surveySpeaker, text: CONFIG.ui.doneMessage });
-    // 마커 모드는 NullScene 위에서 진행되므로 이 호출들은 조용히 no-op된다
-    activeScene.playMotion('jump'); // 감사 인사와 함께 기쁨의 점프
-    sound.play('boing');
-    activeScene.burst('heart');
-    // 카메라 스트림은 [처음으로]에서 해제 — 완료 화면의 [📸 기념사진]이 카메라 프레임을 쓰기 때문.
-    // 무인 운영의 발열·배터리는 키오스크 무입력 리셋이 처리한다.
+  },
+  // 전송 완료 + 캐릭터 인사까지 끝난 시점 — 카메라 스트림은 [처음으로]에서 해제(완료 화면의
+  // [📸 기념사진]이 카메라 프레임을 쓰기 때문). 무인 운영의 발열·배터리는 키오스크 무입력
+  // 리셋이 처리한다.
+  onDone: () => {
     document.getElementById('btn-restart').hidden = false;
     armKioskReset();
-  }, { ...reactionsFor(), lang: CONFIG.lang });
-}
+  },
+};
 
-// A팩 별점 리액션 — 문항 확정 시 캐릭터가 반응한다 (4~5점 신남 / 1~2점 시무룩→힘내기 / 3점 무반응)
-function reactionsFor() {
-  return {
-    onAnswer(key, value) {
-      if (key !== 'rating') return;
-      const n = Number(value);
-      if (n >= 4) {
-        activeScene.playMotion('cheer');
-        activeScene.burst('heart');
-        sound.play('twinkle');
-      } else if (n <= 2) {
-        activeScene.playMotion('sad');
-        setTimeout(() => activeScene.playMotion('wave'), 1100); // 시무룩 후 다시 힘내기
-      }
-    },
-  };
-}
+document.getElementById('btn-next').addEventListener('click', () => guide.next(surveyHandlers));
 
 // 완료 화면 기념 스크린샷 (C팩) — 카메라 프레임 + 3D 캔버스 + 캡션 합성 → 공유/다운로드
 document.getElementById('btn-capture').addEventListener('click', async () => {
@@ -842,11 +766,11 @@ document.getElementById('btn-capture').addEventListener('click', async () => {
     canvasEl: document.getElementById('three-canvas'),
     caption: CONFIG.ui.captureCaption,
   });
-  if (!shared) showLine({ speaker: guideSpeakerLock ?? 'raona', text: CONFIG.ui.captureSavedMessage });
+  if (!shared) showLine({ speaker: guide.surveySpeaker(), text: CONFIG.ui.captureSavedMessage });
 });
 
 document.getElementById('btn-restart').addEventListener('click', () => {
-  activeScene.stopCamera(); // 리셋 직전 카메라 스트림 해제
+  guide.scene().stopCamera(); // 리셋 직전 카메라 스트림 해제
   markerSession?.stop(); // 마커 플로우로 완주한 경우의 카메라 해제 (goHome과 동일)
   location.reload();
 });
@@ -907,7 +831,7 @@ btnXR.addEventListener('click', async () => {
   btnXR.disabled = true;
 
   const xr = await startXR({
-    character: characterCache.get(currentSpeaker),
+    character: guide.loadedCharacter().model,
     overlayRoot: document.getElementById('screen-ar'),
     ...(characterHeight !== undefined && { characterHeight }),
     // renderer.xr.setSession()은 실제 비동기 작업이라 await 뒤에서 모드를 전환하면 그 사이
@@ -922,9 +846,9 @@ btnXR.addEventListener('click', async () => {
       // XR 씬에 캐릭터가 재소속되며 overlay 씬에서 빠졌을 수 있으니 다시 붙여준다.
       router.setMode(null); // scenes/webxr.js의 cleanup() 직후 호출되는 시점과 동일한 순서
       hideXRHint();
-      activeScene = asScene(overlay);
+      guide.setScene(asScene(overlay));
       overlay.resume();
-      const restored = characterCache.get(currentSpeaker);
+      const restored = guide.loadedCharacter().model;
       if (restored) {
         overlay.setCharacter(restored);
         overlay.playEntrance();
@@ -943,7 +867,7 @@ btnXR.addEventListener('click', async () => {
   // router.setMode('xr')는 onSessionGranted 콜백으로 scenes/webxr.js 내부에서 이미
   // (appendChild·setSession await 이전 시점에) 동기 호출됐다 — 여기서 다시 부르지 않는다.
   overlay.pause();
-  activeScene = asScene(xr);
+  guide.setScene(asScene(xr));
   btnXR.hidden = true;
   btnXR.disabled = false;
 
@@ -953,4 +877,4 @@ btnXR.addEventListener('click', async () => {
 });
 // ===========================================================================
 
-syncScreen();
+router.show(guide.screen()); // 최초 로드 시 화면 상태 동기화(원본 syncScreen()의 마지막 호출)
