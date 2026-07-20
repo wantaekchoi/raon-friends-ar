@@ -15,7 +15,9 @@ export function bindLabels(config) {
   document.getElementById('btn-marker-label').textContent = config.ui.btnMarker;
   document.getElementById('btn-marker-badge').textContent = config.ui.btnMarkerBadgeSoon;
   document.getElementById('btn-vision-label').textContent = config.ui.btnVision;
-  document.getElementById('btn-vision-badge').textContent = config.ui.btnVisionBadge;
+  // 기본값은 마커와 동일한 "준비 중" 배지(안전한 쪽) — 모델 배포 여부를 HEAD로 확인하는
+  // start-screen.js의 게이팅이 활성화 가능할 때만 config.ui.btnVisionBadge(체험/Beta 배지)로 바꾼다.
+  document.getElementById('btn-vision-badge').textContent = config.ui.btnMarkerBadgeSoon;
   document.getElementById('vision-hint').textContent = config.ui.visionHint;
   document.getElementById('vision-error-message').textContent = config.ui.visionErrorMessage;
   document.getElementById('btn-vision-fallback-overlay').textContent = config.ui.btnVisionFallbackOverlay;

@@ -1,8 +1,34 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
 
+// vite preview(빌드 산출물 정적 서빙)는 기본 appType:'spa' 히스토리 폴백 때문에 존재하지 않는
+// 정적 파일 요청까지도 index.html(200)로 흘려보낸다 — 실제 배포 호스트(정적 파일 서버, 404 확인됨)
+// 와 로컬 e2e 환경의 동작이 달라져, "파일 존재 여부로 버튼을 게이팅"하는 로직(start-screen.js의
+// #btn-vision — CONFIG.vision.modelPath)을 로컬에서 검증할 수 없다. appType:'mpa'로 전역 폴백을
+// 끄면 해결되지만, 그러면 이 리포에 이미 있던 무관한 텍스처 경로 버그(예:
+// models/D:/...tex.jpg — FBX에 박힌 원본 제작 PC의 절대경로 추정)까지 로컬에서 새로 404로
+// 드러나 다른 시나리오들이 깨진다(실사용 결함 1건만 고치는 이번 작업 범위 밖 — 별도 보고).
+// 그래서 전역 폴백은 그대로 두고, "게이팅 대상 자산이 실제로 없을 때" 요청 하나만 정확히
+// 가로채 진짜 404를 내려주는 좁은 미들웨어를 추가한다. 그 외 모든 경로는 기존 동작 그대로다.
+const GATED_ASSET_PATH = 'models/vision/raon-mascot-classifier.tflite';
+
 export default defineConfig({
   base: '/raon-friends-ar/',
+  plugins: [
+    {
+      name: 'strict-404-for-vision-model-asset',
+      configurePreviewServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.includes(GATED_ASSET_PATH)) {
+            res.statusCode = 404;
+            res.end('Not Found');
+            return;
+          }
+          next();
+        });
+      },
+    },
+  ],
   resolve: {
     alias: [
       // mind-ar 브라우저 번들이 three r152에서 제거된 sRGBEncoding을 import하는 문제 우회.

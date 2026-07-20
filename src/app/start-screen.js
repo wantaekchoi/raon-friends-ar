@@ -5,6 +5,7 @@
 // app/entry.js가 소유하고, 이 모듈은 버튼 클릭을 그 콜백(onOverlay/onMarker/onVision)과
 // 비-AR 최후 폴백(onDirectSurvey, main.js 소유)에 연결만 한다.
 import { STORAGE_KEYS } from './storage-keys.js';
+import { readMockLabelParam } from '../vision/classifier.js';
 
 const SIZE_HEIGHTS = { life: 1.8, giant: 2.5 }; // 크기 칩 선택 → characterHeight 매핑 (store.js와 동일 값)
 
@@ -148,21 +149,41 @@ export function initStartScreen({ config, store, sound, onOverlay, onMarker, onV
     if (!seen && !store.get('kiosk')) el.hidden = false; // 무인 키오스크는 매 리셋마다 온보딩이 뜨면 방해되므로 생략
   }
 
-  // 카드 마커 모드(MindAR) — cards.mind가 실제로 배포돼 있을 때만 버튼을 활성화한다.
-  // (public/targets/cards.mind가 없으면 클릭해도 initMarker()의 addImageTargets가 실패해
-  // entry.js의 catch에서 오버레이로 폴백하지만, 애초에 "준비 중" 배지를 그대로 두는 편이 UX상 낫다.)
-  (async () => {
-    const btnMarker = document.getElementById('btn-marker');
+  // 카드 마커(MindAR)·Vision(MediaPipe) 두 모드 버튼의 공용 게이팅 — 인식 자산(targets/cards.mind,
+  // vision 모델 tflite)이 배포에 없으면 눌러도 100% 실패하니(entry.js의 로드 실패 폴백은 있지만),
+  // 애초에 "준비 중" 배지로 비활성 상태를 유지하는 편이 UX상 낫다. HEAD가 ok(2xx)면 활성화하고,
+  // 404·네트워크 오류·타임아웃은 전부 안전 쪽(비활성)으로 떨어진다 — 두 버튼 모두 기본 HTML이
+  // disabled로 시작하므로 fetch가 끝내 응답하지 않아도 안전한 상태 그대로다.
+  const gateButtonOnAsset = async (path, btn, onAvailable) => {
     try {
-      const res = await fetch(`${import.meta.env.BASE_URL}targets/cards.mind`, { method: 'HEAD' });
+      const res = await fetch(`${import.meta.env.BASE_URL}${path}`, { method: 'HEAD' });
       if (res.ok) {
-        btnMarker.disabled = false;
-        document.getElementById('btn-marker-badge').hidden = true;
+        btn.disabled = false;
+        onAvailable();
       }
     } catch {
       // 네트워크 오류 등 — 비활성 상태 유지
     }
-  })();
+  };
+
+  gateButtonOnAsset('targets/cards.mind', document.getElementById('btn-marker'), () => {
+    document.getElementById('btn-marker-badge').hidden = true;
+  });
+
+  // Vision(MediaPipe) — ?visionMock=<label>이 있으면(실기기 시연·E2E S3가 의존, localhost 게이팅
+  // 대상 아님) HEAD 결과와 무관하게 항상 활성화한다. classifier.js가 실제로 mock을 쓸지 판단하는
+  // readMockLabelParam과 정확히 같은 기준을 써서, "무효한 라벨인데 버튼만 켜져 있다가 실제로는
+  // 실 모델을 시도해 다시 실패하는" 불일치를 막는다.
+  const btnVision = document.getElementById('btn-vision');
+  const activateVision = () => {
+    btnVision.disabled = false;
+    document.getElementById('btn-vision-badge').textContent = config.ui.btnVisionBadge;
+  };
+  if (readMockLabelParam()) {
+    activateVision();
+  } else {
+    gateButtonOnAsset(config.vision.modelPath, btnVision, activateVision);
+  }
 
   document.getElementById('btn-overlay').addEventListener('click', onOverlay);
   document.getElementById('btn-marker').addEventListener('click', onMarker);
