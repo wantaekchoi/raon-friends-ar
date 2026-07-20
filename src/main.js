@@ -75,7 +75,7 @@ const KIOSK_MODE = urlParams.get('kiosk') === '1';
 const soloCharParam = urlParams.get('char');
 const SIZE_HEIGHTS = { life: 1.8, giant: 2.5 };
 const sizeParam = urlParams.get('size');
-const characterHeight = SIZE_HEIGHTS[sizeParam]; // 매칭 안 되면 undefined → 옵션 생략(overlay 기본값 사용)
+let characterHeight = SIZE_HEIGHTS[sizeParam]; // 매칭 안 되면 undefined(기본 크기). 시작 화면 크기 칩이 덮어쓸 수 있다.
 const cameraFacingParam = urlParams.get('camera') === 'user' ? 'user' : undefined;
 
 // ?char=raoni처럼 유효한 캐릭터 키가 주어지면 배턴터치 없이 그 화자로 안내 전체를 고정한다.
@@ -167,6 +167,68 @@ document.querySelectorAll('#start-chars .char-card').forEach((card) => {
     card.classList.add('char-bounce');
   });
 });
+
+
+// ===========================================================================
+// v1.1.0 — URL 파라미터를 몰라도 되는 인앱 메뉴 (모바일 UX)
+// ①크기 칩: 방문객이 탭으로 캐릭터 크기 선택 (reload 없이 characterHeight에 반영)
+// ②운영자 시트(⚙️): 키오스크·매직미러 토글 + 대시보드 — 적용 시 북마크 가능한 URL로 이동
+// ===========================================================================
+{
+  const chipWrap = document.getElementById('size-chips');
+  chipWrap.setAttribute('aria-label', CONFIG.ui.sizeChipsAria);
+  const sizes = [['base', undefined], ['life', SIZE_HEIGHTS.life], ['giant', SIZE_HEIGHTS.giant]];
+  const currentKey = sizeParam && SIZE_HEIGHTS[sizeParam] ? sizeParam : 'base';
+  sizes.forEach(([key, height]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'size-chip' + (key === currentKey ? ' selected' : '');
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', key === currentKey ? 'true' : 'false');
+    b.textContent = CONFIG.ui.sizeChips[key];
+    b.addEventListener('click', () => {
+      characterHeight = height;
+      chipWrap.querySelectorAll('.size-chip').forEach((c) => {
+        c.classList.toggle('selected', c === b);
+        c.setAttribute('aria-checked', c === b ? 'true' : 'false');
+      });
+      sound.play('tap');
+    });
+    chipWrap.appendChild(b);
+  });
+}
+
+{
+  const fab = document.getElementById('btn-operator');
+  const sheet = document.getElementById('operator-sheet');
+  fab.textContent = '⚙️';
+  fab.setAttribute('aria-label', CONFIG.ui.operatorFabAria);
+  document.getElementById('operator-title').textContent = CONFIG.ui.operatorTitle;
+  document.getElementById('op-kiosk-label').textContent = CONFIG.ui.opKiosk;
+  document.getElementById('op-mirror-label').textContent = CONFIG.ui.opMirror;
+  const dash = document.getElementById('op-dashboard');
+  dash.textContent = CONFIG.ui.opDashboard;
+  dash.href = `${import.meta.env.BASE_URL}dashboard.html`;
+  document.getElementById('op-apply').textContent = CONFIG.ui.opApply;
+  document.getElementById('op-close').textContent = CONFIG.ui.opClose;
+
+  document.getElementById('op-kiosk').checked = KIOSK_MODE;
+  document.getElementById('op-mirror').checked = cameraFacingParam === 'user';
+
+  fab.addEventListener('click', () => { sheet.hidden = false; sound.play('tap'); });
+  document.getElementById('op-close').addEventListener('click', () => { sheet.hidden = true; });
+  document.getElementById('op-apply').addEventListener('click', () => {
+    const url = new URL(location.href);
+    ['kiosk', 'camera', 'size'].forEach((k) => url.searchParams.delete(k));
+    if (document.getElementById('op-kiosk').checked) url.searchParams.set('kiosk', '1');
+    if (document.getElementById('op-mirror').checked) url.searchParams.set('camera', 'user');
+    const sel = document.querySelector('.size-chip.selected');
+    const idx = [...document.querySelectorAll('.size-chip')].indexOf(sel);
+    if (idx === 1) url.searchParams.set('size', 'life');
+    if (idx === 2) url.searchParams.set('size', 'giant');
+    location.href = url.toString();
+  });
+}
 
 function syncScreen() {
   document.body.dataset.screen = flow.screen;
