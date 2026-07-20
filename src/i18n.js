@@ -23,10 +23,19 @@ export const STRINGS = {
       { speaker: 'raona', text: '저는 라오나예요! 다음엔 잠깐 설문에 참여해주시면 큰 힘이 돼요!' },
     ],
     characters: {
-      raong: { name: '라옹' },
-      raoni: { name: '라오니' },
-      raona: { name: '라오나' },
+      raong: { name: '라옹', soloIntro: '안녕하세요! 펀펀 시티를 지키는 치료사, 라옹이에요 🐯' },
+      raoni: { name: '라오니', soloIntro: '안녕하세요! 안내 담당 라오니예요 🔍' },
+      raona: { name: '라오나', soloIntro: '안녕하세요! 펀펀 시티를 지키는 라오나예요 🛡️' },
     },
+    // 단독 진행(카드 소환·?char=·Vision) 공용 대사 — 어떤 캐릭터가 말해도 성립하도록
+    // 정체성(이름·1인칭 자기소개)을 넣지 않는다. 자기소개는 characters[key].soloIntro가 담당.
+    soloGuideLines: [
+      'FunFun AI경진대회에 오신 걸 환영해요!',
+      '이 서비스는 AI(Claude Code)와 함께 만든 웹 AR 안내데스크예요.',
+      // ↓ 행사 정보 멘트: 행사마다 여기를 실제 안내(위치·시간·이벤트)로 교체
+      '부스는 자유롭게 체험하실 수 있어요. 옆에 시연 데모도 준비돼 있으니 꼭 들러보세요!',
+      '다음엔 잠깐 설문에 참여해주시면 큰 힘이 돼요!',
+    ],
     scarcityText: '이 부스에서만 만날 수 있어요 🎪',
     onboarding: {
       title: '펀펀 가디언즈가 짠! 하고 나타나요 ✨',
@@ -149,10 +158,18 @@ export const STRINGS = {
       { speaker: 'raona', text: "I'm Raona! A quick survey next would really help us out!" },
     ],
     characters: {
-      raong: { name: 'Raong' },
-      raoni: { name: 'Raoni' },
-      raona: { name: 'Raona' },
+      raong: { name: 'Raong', soloIntro: "Hi! I'm Raong, the healer who watches over Fun Fun City 🐯" },
+      raoni: { name: 'Raoni', soloIntro: "Hi! I'm Raoni, your guide 🔍" },
+      raona: { name: 'Raona', soloIntro: "Hi! I'm Raona, shield guardian of Fun Fun City 🛡️" },
     },
+    // Solo-mode shared lines (card summon / ?char= / Vision) — identity-neutral by design;
+    // self-introduction lives in characters[key].soloIntro.
+    soloGuideLines: [
+      'Welcome to the FunFun AI Competition!',
+      'This app is a web AR reception desk, built together with AI (Claude Code).',
+      "Feel free to explore the booth — there's a live demo right next to us!",
+      'A quick survey next would really help us out!',
+    ],
     scarcityText: 'Only here at this booth! 🎪',
     onboarding: {
       title: 'The Fun Fun Guardians appear — ta-da! ✨',

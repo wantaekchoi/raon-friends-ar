@@ -39,6 +39,8 @@
 
 - **v1.3.0 공간 부착감 개선 (2026-07-20)** — systematic-debugging으로 원인 확정(오버레이=자이로 3DoF 위치 미추적 / 카드=소환 시 오버레이 전환이 6DoF 부착을 버림) 후 3방향 수정: ① 카드 하이브리드 — 소환 후에도 마커 세션 유지(카드 보이면 6DoF 부착, 놓치면 화면 유지, 재인식 시 스냅 — marker.js confirmSummon/attach 재부모화), 가이드·설문 UI는 #screen-ar를 마커 뷰 위에 얹음(body.marker-flow) ② 오버레이 기대 관리 — 자이로 권한 제스처 캐시(ensureGyroPermission, 소환·Vision 경로 대비) + 최초 1회 "제자리에서 둘러보세요" 힌트 ③ iPhone AR Quick Look — 캐릭터 3종 .usdz(three USDZExporter 헤드리스 변환: 툰→스탠더드, 멀티머티리얼 그룹 분할, mergeVertices 용접 — scripts/export-usdz.mjs + usdz-export.html) + iOS에서 [진짜 바닥에 세우기] 버튼(rel="ar" 앵커)으로 네이티브 ARKit 완전 고정. usdz 용량 3.6/6/12.4MB(탭 시에만 다운로드).
 
+- **v1.3.1 단독 진행 정체성 버그 수정 (2026-07-20)** — 카드 소환·?char=·Vision에서 speaker만 바꾸고 대사는 릴레이 원문을 쓰던 lockGuideScriptToCharacter를 폐기, buildSoloGuideScript(캐릭터별 soloIntro + 정체성 중립 soloGuideLines 조립)로 교체. 설문·완료·기념사진 화자도 고정 캐릭터 승계(guideSpeakerLock). 회귀 방지: 실제 STRINGS 기반 정체성 불변식 테스트 14개 추가(총 102개) + ?char=raona 헤드리스 E2E로 전 대사 검증.
+
 ## 아직 안 된 것
 
 [NEXT_STEP.md](NEXT_STEP.md) 참고. 요약: 구글 폼 동의 문항 entry 연결, 대시보드 시트 연동(csvUrl), 실기기 테스트, 시연 영상·신청서 제출, 별점 1~2점 "sad" 리액션 유지 여부 결정.

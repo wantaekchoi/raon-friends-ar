@@ -16,6 +16,7 @@ export const CONFIG = {
   title: S.meta.title,
   lang,
   guideScript: S.guideScript,
+  soloGuideLines: S.soloGuideLines,
   // 한정성 문구(시작 화면) — "일회성 필터"가 아닌 "이 자리에서만" 프레이밍 (리서치 보완 ④)
   scarcityText: S.scarcityText,
   characters: Object.fromEntries(

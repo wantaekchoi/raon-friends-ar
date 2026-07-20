@@ -9,7 +9,7 @@ import { renderSurvey, submitSurvey } from './survey.js';
 import { enqueue, flush, pendingCount } from './queue.js';
 import { initSound } from './sound.js';
 import { captureMoment } from './capture.js';
-import { lockGuideScriptToCharacter } from './solo-character.js';
+import { buildSoloGuideScript } from './solo-character.js';
 
 // F1 다국어 — html lang·문서 제목을 현재 언어에 맞춘다 (CONFIG.lang은 config.js가 모듈 로드
 // 시점에 currentLang()으로 이미 판별해 둔 값).
@@ -79,10 +79,14 @@ const sizeParam = urlParams.get('size');
 let characterHeight = SIZE_HEIGHTS[sizeParam]; // 매칭 안 되면 undefined(기본 크기). 시작 화면 크기 칩이 덮어쓸 수 있다.
 const cameraFacingParam = urlParams.get('camera') === 'user' ? 'user' : undefined;
 
-// ?char=raoni처럼 유효한 캐릭터 키가 주어지면 배턴터치 없이 그 화자로 안내 전체를 고정한다.
-// (텍스트 내용은 기존 guideScript 그대로, speaker만 교체 — solo-character.js의 공통 로직.
-// Vision AI 인식 성공 시에도 동일한 함수로 화자를 고정한다 — 아래 enterVisionMode의 onRecognized 참고.)
-const guideScript = lockGuideScriptToCharacter(CONFIG.guideScript, soloCharParam, CONFIG.characters);
+// ?char=raoni처럼 유효한 캐릭터 키가 주어지면 배턴터치 없이 그 캐릭터가 안내 전체를 단독 진행한다.
+// (soloIntro + 정체성 중립 soloGuideLines로 대본을 새로 조립 — solo-character.js의 공통 로직.
+// 카드 소환·Vision AI 인식 성공 시에도 동일한 함수를 쓴다.)
+// 단독 진행으로 고정된 캐릭터 — 설문·완료 단계 화자도 이 캐릭터가 승계한다(없으면 기본 라오나).
+// 카드 소환·Vision 경로가 진입 시점에 설정하고, ?char=는 아래에서 즉시 설정한다.
+let guideSpeakerLock = null;
+const guideScript = buildSoloGuideScript(soloCharParam, CONFIG);
+if (soloCharParam && CONFIG.characters[soloCharParam]) guideSpeakerLock = soloCharParam;
 
 // Vision AI 인식으로 화자가 새로 고정되면 flow 자체를 새로 만들어 교체한다(가이드 시작 전에만
 // 일어나므로 진행 중인 상태를 끊을 위험이 없다) — 그래서 const가 아니라 let이다.
@@ -442,7 +446,8 @@ document.getElementById('btn-overlay').addEventListener('click', startOverlayFlo
 function startMarkerFlow(key) {
   history.pushState({ ar: true }, ''); // 하드웨어 뒤로가기 → 홈 (오버레이 플로우와 동일)
   document.body.classList.add('marker-flow');
-  flow = createFlow(lockGuideScriptToCharacter(CONFIG.guideScript, key, CONFIG.characters));
+  guideSpeakerLock = key;
+  flow = createFlow(buildSoloGuideScript(key, CONFIG));
   flow.start();
   syncScreen();
   renderGuide();
@@ -715,8 +720,9 @@ async function enterVisionMode() {
         // 3단계: 인식된 캐릭터(raong/raoni/raona)로 안내 전체 화자를 고정한다 — ?char=와 동일한
         // 공통 함수(solo-character.js)를 재사용. flow.start() 이전(가이드 시작 전)이라 안전하게
         // 통째로 재생성할 수 있다. key가 'unknown'이거나 미등록 값이면(정상 경로에서는 발생하지
-        // 않지만 방어적으로) lockGuideScriptToCharacter가 원본 guideScript를 그대로 반환한다.
-        flow = createFlow(lockGuideScriptToCharacter(CONFIG.guideScript, key, CONFIG.characters));
+        // 않지만 방어적으로) buildSoloGuideScript가 원본 릴레이 guideScript를 그대로 반환한다.
+        guideSpeakerLock = key;
+        flow = createFlow(buildSoloGuideScript(key, CONFIG));
         exitVisionScreen();
         document.getElementById('btn-overlay').click();
       },
@@ -762,8 +768,9 @@ document.getElementById('btn-next').addEventListener('click', async () => {
 });
 
 async function startSurvey() {
-  await ensureCharacter('raona'); // 설문 단계는 라오나가 진행
-  showLine({ speaker: 'raona', text: CONFIG.ui.surveyBubbleText });
+  const surveySpeaker = guideSpeakerLock ?? 'raona'; // 기본은 라오나, 단독 진행이면 그 캐릭터가 승계
+  await ensureCharacter(surveySpeaker);
+  showLine({ speaker: surveySpeaker, text: CONFIG.ui.surveyBubbleText });
   const panel = document.getElementById('survey-panel');
   panel.hidden = false;
   renderSurvey(panel, SURVEY_QUESTIONS, async (answers) => {
@@ -777,7 +784,7 @@ async function startSurvey() {
     document.getElementById('btn-capture').hidden = false;
 
     await submitAndRetry(answers, {
-      onMessage: (text) => showLine({ speaker: 'raona', text }),
+      onMessage: (text) => showLine({ speaker: surveySpeaker, text }),
       retryParent: document.getElementById('screen-ar'),
       onFail: () => {
         document.getElementById('btn-restart').hidden = false;
@@ -787,8 +794,8 @@ async function startSurvey() {
 
     flow.finishSurvey();
     syncScreen();
-    await ensureCharacter('raona'); // 완료 화면도 라오나가 인사
-    showLine({ speaker: 'raona', text: CONFIG.ui.doneMessage });
+    await ensureCharacter(surveySpeaker); // 완료 화면도 진행 캐릭터가 인사
+    showLine({ speaker: surveySpeaker, text: CONFIG.ui.doneMessage });
     // 마커 모드는 activeScene 없이 진행되므로 null 가드 필수
     activeScene?.playMotion?.('jump'); // 감사 인사와 함께 기쁨의 점프
     sound.play('boing');
@@ -826,7 +833,7 @@ document.getElementById('btn-capture').addEventListener('click', async () => {
     canvasEl: document.getElementById('three-canvas'),
     caption: CONFIG.ui.captureCaption,
   });
-  if (!shared) showLine({ speaker: 'raona', text: CONFIG.ui.captureSavedMessage });
+  if (!shared) showLine({ speaker: guideSpeakerLock ?? 'raona', text: CONFIG.ui.captureSavedMessage });
 });
 
 document.getElementById('btn-restart').addEventListener('click', () => {
