@@ -573,3 +573,14 @@ a:focus-visible,
   padding: 10px; border: none; border-radius: 14px; background: #f0e6dc;
   color: #7a3a0c; font-size: 0.9rem; font-weight: 700; font-family: inherit;
 }
+
+/* --- 🏠 홈 버튼 (AR 좌하단 · 마커 좌상단) --- */
+.home-fab {
+  position: absolute; left: max(14px, env(safe-area-inset-left));
+  bottom: max(24px, env(safe-area-inset-bottom)); z-index: 5;
+  width: 40px; height: 40px; border: none; border-radius: 50%;
+  background: rgba(30, 20, 10, 0.55); font-size: 1.05rem;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.home-fab-top { bottom: auto; top: max(14px, env(safe-area-inset-top)); }

@@ -341,6 +341,8 @@ function lockGuideToCharacter(key) {
 async function startOverlayFlow() {
   if (overlayEntering) return;
   overlayEntering = true;
+  history.pushState({ ar: true }, ''); // 하드웨어 뒤로가기 → 홈 (사이트 이탈 방지)
+  document.getElementById('btn-home').hidden = false;
   flow.start();
   syncScreen();
   overlay = await initOverlay({
@@ -365,6 +367,23 @@ async function startOverlayFlow() {
 }
 
 document.getElementById('btn-overlay').addEventListener('click', startOverlayFlow);
+
+// 🏠 홈 — AR/마커 어디서든 처음 화면으로. 카메라·세션을 정리하는 가장 안전한 방법은 reload.
+function goHome() {
+  try { activeScene?.stopCamera?.(); markerSession?.stop(); } catch { /* 정리 실패해도 리로드는 진행 */ }
+  location.reload();
+}
+{
+  const btnHome = document.getElementById('btn-home');
+  const btnHomeMarker = document.getElementById('btn-home-marker');
+  [btnHome, btnHomeMarker].forEach((b) => {
+    b.textContent = CONFIG.ui.btnHome;
+    b.setAttribute('aria-label', CONFIG.ui.btnHomeAria);
+    b.addEventListener('click', goHome);
+  });
+}
+// Android 하드웨어 뒤로가기: AR 진입 시 히스토리 한 칸을 쌓아 사이트 이탈 대신 홈으로
+window.addEventListener('popstate', () => { if (flow.screen !== SCREENS.START) goHome(); });
 
 // ===========================================================================
 // F3 비AR 최후 폴백 — "카메라 없이 참여하기" (카메라·AR 없이도 참여 경로가 끊기지 않게)
