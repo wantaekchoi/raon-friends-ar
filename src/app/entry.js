@@ -7,6 +7,7 @@ import { initOverlay } from '../scenes/overlay.js';
 import { isXRSupported } from '../scenes/webxr.js';
 import { asScene } from './scenes.js';
 import { scaledMs } from './timing.js';
+import { testParam } from './test-params.js';
 import { STORAGE_KEYS } from './storage-keys.js';
 
 // 모드 진입 중복 가드 — 기존 overlayEntering/markerEntering/visionEntering 3벌의 공통화.
@@ -66,9 +67,11 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
       guide.begin();
       const gyroOk = await ensureGyroPermission();
       // 테스트 전용 파라미터(S7 헤드리스 자이로 검증) — README·운영자 시트에는 절대 노출하지 않는다.
-      // 실기기 권한 여부와 무관하게 자이로 회전 경로 자체(orientationProvider → camera.quaternion)를
-      // 결정적으로 태우기 위해 gyroAllowed를 강제 true로 둔다.
-      const fakeGyro = store.params.get('fakeGyro') === '1';
+      // localhost/127.0.0.1 전용 게이트(test-params.js) — 공개 배포 URL에서 ?fakeGyro=1로
+      // 자이로 구독 자체를 죽이는(아무도 orientationProvider 콜백을 호출하지 않아 회전이 멈추는)
+      // 오작동을 막는다. 실기기 권한 여부와 무관하게 자이로 회전 경로 자체(orientationProvider →
+      // camera.quaternion)를 결정적으로 태우기 위해 gyroAllowed를 강제 true로 둔다.
+      const fakeGyro = testParam('fakeGyro') === '1';
       overlay = await initOverlay({
         videoEl: document.getElementById('camera-video'),
         canvasEl: document.getElementById('three-canvas'),
@@ -138,6 +141,12 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
 
   // D1: mind-ar(무거운 의존성)는 카드 모드 버튼을 실제로 눌렀을 때만 로드한다 —
   // 초기 번들에서 분리되는 별도 청크이므로 로딩 중임을 버튼 상태로 보여준다.
+  //
+  // ?markerMock=<raong|raoni|raona>(테스트 전용, testParam으로 localhost 게이트): 헤드리스 E2E는
+  // fake 카메라로 실제 카드 인식이 불가능해 S4가 30초 폴백 경로만 검증한다 — 셸 재작성이 실제로
+  // 바꾼 소환 성공 경로(startMarkerFlow → router.setMode('marker-flow') → guide.lockTo)는 그동안
+  // 한 번도 E2E가 밟지 않았다. markerMock이 있으면 mind-ar 로드·카메라 세션 없이, 실제 인식
+  // 성공과 동일한 후속 시퀀스(confirmTarget)를 짧은 지연 후 실행해 그 경로를 결정적으로 태운다.
   async function enterMarkerMode() {
     return guardMarker(async () => {
       ensureGyroPermission(); // 제스처 컨텍스트에서 선요청 — 소환 후 오버레이 전환 대비 (await 안 함: 프롬프트와 병행 진행)
@@ -149,19 +158,24 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
       btnMarker.classList.add('btn-loading');
       labelEl.textContent = config.ui.btnMarkerLoading;
 
+      const mockKey = testParam('markerMock');
+      const isMock = !!mockKey && !!config.characters?.[mockKey];
+
       let initMarker;
-      try {
-        ({ initMarker } = await import('../scenes/marker.js'));
-      } catch (err) {
-        console.warn('마커 모듈 로드 실패 — 준비 중 상태로 복귀', err);
-        labelEl.textContent = labelBeforeLoad;
-        btnMarker.classList.remove('btn-loading');
-        btnMarker.disabled = false;
-        // 원본(main.js)은 이 실패 경로에서만 markerEntering을 되돌려 재시도를 허용했다 — 버튼은
-        // 복원됐는데 가드만 잠긴 채면 클릭이 조용히 무시되는 회귀가 생긴다(리뷰 Important). 동일하게
-        // guardMarker를 재무장해 다음 클릭이 다시 import를 시도하게 한다.
-        guardMarker.reset();
-        return;
+      if (!isMock) {
+        try {
+          ({ initMarker } = await import('../scenes/marker.js'));
+        } catch (err) {
+          console.warn('마커 모듈 로드 실패 — 준비 중 상태로 복귀', err);
+          labelEl.textContent = labelBeforeLoad;
+          btnMarker.classList.remove('btn-loading');
+          btnMarker.disabled = false;
+          // 원본(main.js)은 이 실패 경로에서만 markerEntering을 되돌려 재시도를 허용했다 — 버튼은
+          // 복원됐는데 가드만 잠긴 채면 클릭이 조용히 무시되는 회귀가 생긴다(리뷰 Important). 동일하게
+          // guardMarker를 재무장해 다음 클릭이 다시 import를 시도하게 한다.
+          guardMarker.reset();
+          return;
+        }
       }
       btnMarker.classList.remove('btn-loading');
       labelEl.textContent = labelBeforeLoad;
@@ -194,26 +208,40 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
 
       fallbackBtn.addEventListener('click', fallbackToOverlay, { once: true });
 
+      // 카드 인식 성공 이후 공통 시퀀스 — 실제 인식(아래 onTarget)과 헤드리스 E2E용 markerMock이
+      // 동일한 함수를 호출한다(복붙 금지, S8 브리프 요구사항). 소환 힌트 문구 → 효과음 →
+      // startMarkerFlow(key) 순서는 원본 onTarget 그대로다.
+      function confirmTarget(key) {
+        if (found) return; // 첫 인식 카드가 소환 확정 — 이후 다른 카드 인식은 무시
+        found = true;
+        clearTimeout(fallbackTimer);
+        fallbackBtn.hidden = true;
+        // 소환 확정: 마커 세션을 유지한 채 진행한다 — 카드가 보이면 캐릭터가 카드에 딱 붙고(6DoF),
+        // 놓치면 화면에 남았다가 재인식 시 다시 붙는다(marker.js confirmSummon). 오버레이(3DoF)로
+        // 넘기던 이전 방식은 부착감을 잃어 폐기 (부착감 계획 Task A, 실기기 피드백 2026-07-20).
+        // markerMock 경로는 markerSession이 없어(mind-ar 미로드) confirmSummon 호출이 조용히
+        // 생략된다 — 이후 화면 조합(guide.lockTo/startMarkerFlow)은 실인식과 동일하게 탄다.
+        hint.hidden = false;
+        hint.textContent = config.ui.markerSummoned.replace('{name}', config.characters[key].name);
+        sound.play('twinkle');
+        markerSession?.confirmSummon(key);
+        setTimeout(() => {
+          hint.hidden = true;
+          startMarkerFlow(key);
+        }, 1600);
+      }
+
+      if (isMock) {
+        // 실제 카드 인식(수백ms~수초)을 흉내내는 짧은 지연 — mind-ar·카메라 없이도 그 이후
+        // 시퀀스(confirmTarget)는 실인식 경로와 완전히 동일하다.
+        setTimeout(() => confirmTarget(mockKey), 300);
+        return;
+      }
+
       try {
         markerSession = await initMarker({
           containerEl: document.getElementById('marker-container'),
-          onTarget(key) {
-            if (found) return; // 첫 인식 카드가 소환 확정 — 이후 다른 카드 인식은 무시
-            found = true;
-            clearTimeout(fallbackTimer);
-            fallbackBtn.hidden = true;
-            // 소환 확정: 마커 세션을 유지한 채 진행한다 — 카드가 보이면 캐릭터가 카드에 딱 붙고(6DoF),
-            // 놓치면 화면에 남았다가 재인식 시 다시 붙는다(marker.js confirmSummon). 오버레이(3DoF)로
-            // 넘기던 이전 방식은 부착감을 잃어 폐기 (부착감 계획 Task A, 실기기 피드백 2026-07-20).
-            hint.hidden = false;
-            hint.textContent = config.ui.markerSummoned.replace('{name}', config.characters[key].name);
-            sound.play('twinkle');
-            markerSession?.confirmSummon(key);
-            setTimeout(() => {
-              hint.hidden = true;
-              startMarkerFlow(key);
-            }, 1600);
-          },
+          onTarget: confirmTarget,
           // 소환 확정 후 트래킹 상태 전환 알림 — 카드를 놓치면 재부착 방법 힌트를 잠깐 보여준다
           onHoldChange(tracked) {
             if (!found) return;

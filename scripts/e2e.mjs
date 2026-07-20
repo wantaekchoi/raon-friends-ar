@@ -12,6 +12,7 @@ const scenarioModules = [
   './e2e/scenarios/s5-survey-submit.mjs',
   './e2e/scenarios/s6-params.mjs',
   './e2e/scenarios/s7-gyro-fake.mjs',
+  './e2e/scenarios/s8-marker-summon.mjs',
 ];
 
 execSync('npm run build', { stdio: 'inherit' });
