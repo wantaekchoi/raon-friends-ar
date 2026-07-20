@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>라온 프렌즈 부스 대시보드</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        height: 100%;
+        font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
+        background: linear-gradient(160deg, #fff7ef 0%, #ffe3c7 55%, #ffbb70 100%);
+        color: #3a2b1f;
+      }
+      body { padding: clamp(20px, 4vw, 48px); }
+
+      header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: clamp(20px, 3vw, 36px); }
+      h1 { font-size: clamp(1.4rem, 2.6vw, 2.1rem); color: #e8590c; letter-spacing: -0.01em; }
+      h1 .emoji { margin-right: 6px; }
+      #updated { font-size: 0.85rem; color: #8a6a4f; }
+
+      #mode-badge {
+        display: inline-block; margin-left: 10px; padding: 3px 12px; border-radius: 999px;
+        font-size: 0.7rem; font-weight: 700; letter-spacing: 0.03em; vertical-align: middle;
+      }
+      #mode-badge.demo { background: #fff1e2; color: #c9660a; border: 1px solid #ffbb70; }
+      #mode-badge.live { background: #e2f7ee; color: #0d7a58; border: 1px solid #6fd6ab; }
+
+      .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(14px, 2vw, 24px); }
+      @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+      .card {
+        background: rgba(255, 255, 255, 0.92);
+        border-radius: 22px;
+        padding: clamp(20px, 2.6vw, 30px);
+        box-shadow: 0 12px 32px rgba(232, 89, 12, 0.14), 0 2px 8px rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(255, 187, 112, 0.5);
+        display: flex; flex-direction: column;
+      }
+      .card-label { font-size: 0.85rem; font-weight: 700; color: #c9660a; letter-spacing: 0.02em; margin-bottom: 10px; }
+      .card-big { font-size: clamp(2.4rem, 5vw, 3.4rem); font-weight: 800; color: #e8590c; line-height: 1; }
+      .card-sub { margin-top: 8px; font-size: 0.9rem; color: #8a6a4f; }
+
+      #stars { font-size: clamp(1.4rem, 2.8vw, 1.9rem); letter-spacing: 2px; margin-top: 4px; }
+      #stars .full { color: #ff7a1a; }
+      #stars .empty { color: #ffe0c2; }
+
+      #feedback-list { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-top: 2px; }
+      #feedback-list li {
+        background: #fff8f0; border-radius: 14px; padding: 10px 14px;
+        font-size: 0.92rem; line-height: 1.5; color: #4a3626;
+        border-left: 4px solid #ff9d4d;
+      }
+      #feedback-list .empty-hint { color: #b09a86; font-style: italic; border-left-color: #ffd8ae; }
+
+      footer { margin-top: clamp(20px, 3vw, 32px); text-align: center; font-size: 0.78rem; color: #b09a86; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1><span class="emoji">🐯</span>라온 프렌즈 부스 대시보드<span id="mode-badge" class="demo">데모 데이터</span></h1>
+      <span id="updated">불러오는 중…</span>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="card-label">누적 참여 수</div>
+        <div class="card-big" id="stat-count">0</div>
+        <div class="card-sub">명이 설문에 참여했어요</div>
+      </section>
+
+      <section class="card">
+        <div class="card-label">평균 만족도</div>
+        <div class="card-big" id="stat-rating">0.0</div>
+        <div id="stars" aria-hidden="true"></div>
+        <div class="card-sub">5점 만점 별점 평균</div>
+      </section>
+
+      <section class="card">
+        <div class="card-label">최근 응원 한마디</div>
+        <ul id="feedback-list"></ul>
+      </section>
+    </main>
+
+    <footer>10초마다 자동 갱신 · 라온 프렌즈 AR 안내데스크</footer>
+
+    <script type="module">
+      import { CONFIG, SURVEY_QUESTIONS, DASHBOARD } from './src/config.js';
+
+      const POLL_MS = 10000;
+
+      const ratingQuestion = SURVEY_QUESTIONS.find((q) => q.key === 'rating');
+      const feedbackQuestion = SURVEY_QUESTIONS.find((q) => q.key === 'feedback');
+
+      // 구글 시트 "웹에 게시" CSV는 RFC4180과 유사하게 필드를 큰따옴표로 감싸고(콤마·줄바꿈 포함 시)
+      // 큰따옴표 자체는 ""로 이스케이프한다. 그 규칙만 처리하는 최소 파서.
+      function parseCsv(text) {
+        const rows = [];
+        let row = [];
+        let field = '';
+        let inQuotes = false;
+        for (let i = 0; i < text.length; i++) {
+          const c = text[i];
+          if (inQuotes) {
+            if (c === '"') {
+              if (text[i + 1] === '"') { field += '"'; i++; }
+              else inQuotes = false;
+            } else {
+              field += c;
+            }
+          } else if (c === '"') {
+            inQuotes = true;
+          } else if (c === ',') {
+            row.push(field); field = '';
+          } else if (c === '\n') {
+            row.push(field); rows.push(row); row = []; field = '';
+          } else if (c === '\r') {
+            // 무시 — 뒤따르는 \n에서 행을 끊는다
+          } else {
+            field += c;
+          }
+        }
+        if (field.length || row.length) { row.push(field); rows.push(row); }
+        return rows.filter((r) => r.some((cell) => cell.trim() !== ''));
+      }
+
+      // 헤더가 설문 문항의 label과 정확히 일치하는 게 이상적이지만(구글 폼이 그렇게 컬럼명을
+      // 만든다), 공백·줄바꿈 차이에 대비해 완화 매칭(포함 관계)도 시도한다.
+      function findColumn(header, label) {
+        let idx = header.indexOf(label);
+        if (idx === -1) idx = header.findIndex((h) => h.includes(label) || label.includes(h));
+        return idx;
+      }
+
+      function csvToStats(text) {
+        const rows = parseCsv(text);
+        if (rows.length < 2) return null;
+        const header = rows[0].map((h) => h.trim());
+        const body = rows.slice(1);
+
+        const ratingIdx = findColumn(header, ratingQuestion.label);
+        const feedbackIdx = findColumn(header, feedbackQuestion.label);
+        if (ratingIdx === -1 || feedbackIdx === -1) {
+          // 구글 폼 문항 문구와 i18n.js label이 어긋나면 조용히 0.0이 표시되는 함정 방지 (적대 리뷰 MED 6)
+          console.warn('[dashboard] CSV 헤더와 설문 label 불일치 — 시트 헤더/문항 문구 확인 필요', header);
+          const badge = document.getElementById('mode-badge');
+          badge.textContent = '⚠️ 헤더 불일치';
+          badge.className = 'demo';
+        }
+
+        const ratings = ratingIdx >= 0
+          ? body.map((r) => Number.parseFloat(r[ratingIdx])).filter((n) => Number.isFinite(n))
+          : [];
+        const avgRating = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+
+        const feedbacks = feedbackIdx >= 0
+          ? body.map((r) => (r[feedbackIdx] || '').trim()).filter(Boolean)
+          : [];
+        const recentFeedback = feedbacks.slice(-3).reverse();
+
+        return { count: body.length, avgRating, recentFeedback };
+      }
+
+      function demoStats() {
+        return {
+          count: 27,
+          avgRating: 4.6,
+          recentFeedback: [
+            '캐릭터가 진짜 살아있는 것 같아요! 최고예요 🐯',
+            '앱 설치 없이 바로 되니까 신기했어요',
+            'AI로 이걸 다 만들었다니 놀랍네요 👏',
+          ],
+        };
+      }
+
+      function renderStars(avg) {
+        const full = Math.round(avg);
+        let html = '';
+        for (let i = 0; i < 5; i++) html += `<span class="${i < full ? 'full' : 'empty'}">★</span>`;
+        return html;
+      }
+
+      function render(stats, { demo }) {
+        document.getElementById('stat-count').textContent = String(stats.count);
+        document.getElementById('stat-rating').textContent = stats.avgRating.toFixed(1);
+        document.getElementById('stars').innerHTML = renderStars(stats.avgRating);
+
+        const list = document.getElementById('feedback-list');
+        list.innerHTML = '';
+        if (!stats.recentFeedback.length) {
+          const li = document.createElement('li');
+          li.className = 'empty-hint';
+          li.textContent = '아직 응원 한마디가 없어요';
+          list.appendChild(li);
+        } else {
+          for (const text of stats.recentFeedback) {
+            const li = document.createElement('li');
+            li.textContent = text;
+            list.appendChild(li);
+          }
+        }
+
+        const badge = document.getElementById('mode-badge');
+        badge.textContent = demo ? '데모 데이터' : '실시간 연동';
+        badge.className = demo ? 'demo' : 'live';
+
+        document.getElementById('updated').textContent = `마지막 갱신 ${new Date().toLocaleTimeString('ko-KR')}`;
+      }
+
+      // 데모 데이터는 ?demo=1일 때만 — 공개 URL에서 가짜 숫자가 실데이터처럼 보이는 것 방지.
+      const DEMO_REQUESTED = new URLSearchParams(location.search).get('demo') === '1';
+
+      function renderWaiting() {
+        document.getElementById('stat-count').textContent = '–';
+        document.getElementById('stat-rating').textContent = '–';
+        document.getElementById('stars').innerHTML = '';
+        const list = document.getElementById('feedback-list');
+        list.innerHTML = '';
+        const li = document.createElement('li');
+        li.className = 'empty-hint';
+        li.textContent = '아직 응답 시트와 연동되지 않았어요 — src/config.js의 DASHBOARD.csvUrl을 설정하세요. (데모 미리보기: 주소 뒤에 ?demo=1)';
+        list.appendChild(li);
+        const badge = document.getElementById('mode-badge');
+        badge.textContent = '연동 대기';
+        badge.className = 'demo';
+        document.getElementById('updated').textContent = '';
+      }
+
+      async function tick() {
+        if (!DASHBOARD.csvUrl) {
+          if (DEMO_REQUESTED) render(demoStats(), { demo: true });
+          else renderWaiting();
+          return;
+        }
+        try {
+          const res = await fetch(DASHBOARD.csvUrl, { cache: 'no-store' });
+          if (!res.ok) throw new Error(`CSV 응답 오류: ${res.status}`);
+          const text = await res.text();
+          const stats = csvToStats(text);
+          if (!stats) throw new Error('CSV에 데이터가 없어요');
+          render(stats, { demo: false });
+        } catch (e) {
+          console.warn('대시보드 CSV 폴링 실패 — 데모 데이터로 표시', e);
+          render(demoStats(), { demo: true });
+        }
+      }
+
+      document.title = `${CONFIG.title} · 대시보드`;
+      tick();
+      setInterval(tick, POLL_MS);
+    </script>
+  </body>
+</html>

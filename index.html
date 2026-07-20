@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>라온 프렌즈 AR 안내데스크</title>
+  </head>
+  <body data-screen="start">
+    <div id="onboarding" hidden>
+      <div class="onboarding-content">
+        <h2 id="onboarding-title"></h2>
+        <div id="onboarding-steps"></div>
+        <button id="btn-onboarding-start" type="button"></button>
+      </div>
+    </div>
+
+    <section id="screen-start">
+      <div class="bg-decor" aria-hidden="true">
+        <span class="decor decor-circle deco-c1"></span>
+        <span class="decor decor-circle deco-c2"></span>
+        <span class="decor decor-circle deco-c3"></span>
+        <span class="decor decor-star deco-s1">★</span>
+        <span class="decor decor-star deco-s2">✦</span>
+        <span class="decor decor-star deco-s3">★</span>
+        <span class="decor decor-paw deco-p1">🐾</span>
+        <span class="decor decor-paw deco-p2">🐾</span>
+      </div>
+      <button id="btn-lang-toggle" type="button" class="lang-toggle"></button>
+      <div class="start-content">
+        <h1 id="start-title"></h1>
+        <p id="start-subtitle" class="start-subtitle"></p>
+        <p id="start-scarcity"></p>
+        <div id="start-chars"></div>
+        <div class="start-actions">
+          <button id="btn-overlay">
+            <span class="btn-emoji" aria-hidden="true">✨</span><span id="btn-overlay-label"></span>
+          </button>
+          <button id="btn-marker" disabled>
+            <span id="btn-marker-label"></span> <span class="badge-soon" id="btn-marker-badge"></span>
+          </button>
+        </div>
+        <p id="hint-text" class="hint"></p>
+        <a id="btn-no-camera" href="#" role="button"></a>
+        <p id="brand-line" class="brand-line"></p>
+      </div>
+    </section>
+
+    <section id="screen-marker">
+      <div id="marker-container"></div>
+      <div id="marker-hint" role="status" aria-live="polite"></div>
+      <button id="btn-marker-fallback" hidden></button>
+    </section>
+
+    <section id="screen-survey-direct">
+      <div class="direct-survey-content">
+        <h2 id="direct-survey-title"></h2>
+        <div id="survey-panel-direct"></div>
+        <div id="direct-done" hidden>
+          <p class="direct-done-message"></p>
+          <p id="direct-fail-message" role="status" aria-live="polite"></p>
+          <a class="google-form-link" href="#" hidden></a>
+          <button id="btn-direct-restart" type="button" hidden></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-ar">
+      <video id="camera-video" autoplay muted playsinline></video>
+      <canvas id="three-canvas"></canvas>
+      <button id="btn-sound" aria-label="효과음 끄기">🔊</button>
+      <div id="bubble" hidden role="status" aria-live="polite"><span id="bubble-name"></span><p id="bubble-text"></p></div>
+      <div id="xr-hint" hidden role="status" aria-live="polite"></div>
+      <button id="btn-next" hidden></button>
+      <div id="survey-panel" hidden></div>
+      <div id="done-panel" hidden>
+        <button id="btn-capture" type="button" hidden></button>
+        <a class="google-form-link" href="#" hidden></a>
+      </div>
+      <button id="btn-restart" hidden></button>
+      <button id="btn-xr" hidden></button>
+    </section>
+
+    <div id="error-screen" hidden role="alert">
+      <div class="error-content">
+        <img src="img/raong.png" id="error-img" class="error-img" />
+        <p id="error-message" class="error-message"></p>
+        <button id="btn-error-restart" type="button"></button>
+        <a class="google-form-link" href="#" hidden></a>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

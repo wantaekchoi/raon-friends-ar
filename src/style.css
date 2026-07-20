@@ -1,0 +1,529 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif; }
+
+section { display: none; }
+body[data-screen="start"] #screen-start { display: flex; }
+body[data-screen="guide"] #screen-ar,
+body[data-screen="survey"] #screen-ar,
+body[data-screen="done"] #screen-ar { display: block; }
+
+#screen-start {
+  position: relative; overflow: hidden;
+  height: 100dvh; flex-direction: column; justify-content: center; align-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 15% 8%, rgba(255, 255, 255, 0.55), transparent 40%),
+    radial-gradient(circle at 85% 88%, rgba(255, 140, 60, 0.35), transparent 45%),
+    linear-gradient(160deg, #fff7ef 0%, #ffe3c7 55%, #ffbb70 100%);
+}
+
+/* 배경 장식: 원/별/발자국 (CSS-only, transform/opacity만 사용) */
+.bg-decor { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.decor { position: absolute; will-change: transform; }
+.decor-circle {
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.65), rgba(255, 154, 58, 0.12) 70%);
+  animation: decorDrift ease-in-out infinite;
+}
+.deco-c1 { width: 130px; height: 130px; top: 4%; left: -36px; animation-duration: 10s; }
+.deco-c2 { width: 76px; height: 76px; bottom: 20%; right: -16px; animation-duration: 8s; animation-delay: 1s; }
+.deco-c3 { width: 44px; height: 44px; top: 42%; right: 10%; animation-duration: 7s; animation-delay: 0.4s; }
+.decor-star {
+  color: rgba(255, 255, 255, 0.9); text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+  animation: decorTwinkle ease-in-out infinite;
+}
+.deco-s1 { top: 9%; right: 14%; font-size: 1.1rem; animation-duration: 2.6s; }
+.deco-s2 { top: 24%; left: 9%; font-size: 0.8rem; animation-duration: 2.2s; animation-delay: 0.6s; }
+.deco-s3 { bottom: 32%; left: 16%; font-size: 0.75rem; animation-duration: 2.8s; animation-delay: 1.1s; }
+.decor-paw { font-size: 1.15rem; opacity: 0.45; animation: decorPaw ease-in-out infinite; }
+.deco-p1 { bottom: 9%; left: 7%; animation-duration: 6s; }
+.deco-p2 { top: 13%; right: 7%; animation-duration: 6.4s; animation-delay: 1.4s; }
+
+@keyframes decorDrift {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(10px, -16px); }
+}
+@keyframes decorTwinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+@keyframes decorPaw {
+  0%, 100% { transform: translateY(0) rotate(-6deg); opacity: 0.3; }
+  50% { transform: translateY(-14px) rotate(6deg); opacity: 0.55; }
+}
+
+.start-content {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  text-align: center;
+}
+
+#start-title {
+  font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em;
+  background: linear-gradient(90deg, #e8590c, #ff7a1a 70%);
+  background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  animation: titlePop 0.8s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+.start-subtitle {
+  /* F2 접근성: #a0592a는 배경 그라데이션의 어두운 쪽에서 WCAG AA 4.5:1 미달 — #7a3a0c로 보정 */
+  font-size: 0.95rem; font-weight: 500; color: #7a3a0c;
+  animation: fadeUp 0.7s ease 0.15s both;
+}
+
+@keyframes titlePop {
+  0% { opacity: 0; transform: translateY(14px) scale(0.85); }
+  60% { opacity: 1; transform: translateY(-4px) scale(1.04); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+#start-chars { display: flex; gap: 16px; margin-top: 2px; }
+.char-card {
+  background: none; border: none; padding: 4px; font: inherit; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  animation: charFloat 2.8s ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+.char-card img {
+  width: 92px; height: 92px; object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgba(232, 89, 12, 0.28));
+}
+.char-name {
+  /* F2 접근성: #e8590c는 흰 배경에서 3.58:1로 4.5:1 미달 — #a83c08로 보정 */
+  font-size: 0.72rem; font-weight: 700; color: #a83c08;
+  background: rgba(255, 255, 255, 0.85); padding: 2px 10px; border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+@keyframes charFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.char-card.char-bounce img { animation: charTapBounce 0.5s ease-out; }
+@keyframes charTapBounce {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.25, 0.8) translateY(6px); }
+  55% { transform: scale(0.9, 1.15) translateY(-10px); }
+  75% { transform: scale(1.06, 0.96); }
+  100% { transform: scale(1); }
+}
+
+.start-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 4px; }
+
+#btn-overlay, #btn-marker {
+  border: none; border-radius: 999px; font-size: 1rem; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+#btn-overlay {
+  position: relative; isolation: isolate;
+  padding: 16px 34px; font-size: 1.05rem; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #ff9d4d, #ff7a1a 55%, #f2540a);
+  box-shadow: 0 10px 24px rgba(232, 89, 12, 0.4), 0 2px 6px rgba(232, 89, 12, 0.3);
+  cursor: pointer; transition: transform 0.15s ease;
+}
+#btn-overlay:active { transform: scale(0.97); }
+#btn-overlay::after {
+  content: ''; position: absolute; inset: -6px; z-index: -1;
+  border-radius: inherit; background: inherit;
+  animation: btnGlow 2.2s ease-out infinite;
+}
+@keyframes btnGlow {
+  0% { opacity: 0.55; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.28); }
+}
+.btn-emoji { display: inline-block; animation: emojiWiggle 1.6s ease-in-out infinite; }
+@keyframes emojiWiggle {
+  0%, 100% { transform: rotate(-12deg); }
+  50% { transform: rotate(12deg); }
+}
+
+#btn-marker {
+  /* F2 접근성: 원래 #9a9a9a는 배경 #eef0f2에서 2.46:1로 미달 — #606060으로 보정 */
+  padding: 13px 26px; font-size: 0.92rem; font-weight: 600;
+  background: #eef0f2; color: #606060; cursor: not-allowed;
+}
+.badge-soon {
+  /* F2 접근성: 원래 #c96a1f는 배경 #ffe3c7에서 3.07:1로 미달 — #7a3a0c로 보정 */
+  font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  background: #ffe3c7; color: #7a3a0c; white-space: nowrap;
+}
+
+/* F2 접근성: 원래 #a0764f는 배경 그라데이션에서 4.5:1 미달 — #7a3a0c로 보정 */
+.hint { font-size: 0.8rem; color: #7a3a0c; margin-top: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .decor,
+  #start-title,
+  .start-subtitle,
+  .char-card,
+  .char-card.char-bounce img,
+  #btn-overlay::after,
+  .btn-emoji {
+    animation: none !important;
+  }
+}
+
+#screen-ar { position: fixed; inset: 0; }
+#bubble {
+  position: absolute; top: max(24px, env(safe-area-inset-top)); left: 16px; right: 16px;
+  background: rgba(255, 255, 255, 0.94); border-radius: 20px; padding: 16px 18px;
+  box-shadow: 0 10px 28px rgba(232, 89, 12, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(6px); z-index: 2;
+}
+/* F2 접근성: 원래 #e8590c는 배경 rgba(255,255,255,0.94)에서 3.58:1로 4.5:1 미달 — #a83c08로 보정 */
+#bubble-name { font-weight: 700; color: #a83c08; font-size: 0.85rem; letter-spacing: 0.01em; }
+#bubble-text { margin-top: 4px; font-size: 1rem; line-height: 1.55; min-height: 3em; color: #3a2b1f; }
+#btn-next {
+  position: absolute; bottom: max(28px, env(safe-area-inset-bottom)); left: 50%;
+  transform: translateX(-50%); z-index: 2;
+  padding: 13px 34px; border: none; border-radius: 999px;
+  background: #ff7a1a; color: #fff; font-size: 1rem; font-weight: 700;
+  box-shadow: 0 8px 20px rgba(232, 89, 12, 0.35);
+}
+#camera-video, #three-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#camera-video { object-fit: cover; }
+body.no-camera #camera-video { display: none; }
+body.no-camera #screen-ar { background: linear-gradient(180deg, #2b1a3a, #6b3f8f); }
+
+/* --- S3. 설문 화면 --- */
+#survey-panel {
+  position: absolute; left: 16px; right: 16px; bottom: max(28px, env(safe-area-inset-bottom));
+  z-index: 3;
+}
+
+.survey-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 0 4px; }
+.survey-progress-bar {
+  flex: 1; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+}
+.survey-progress-fill {
+  height: 100%; border-radius: 999px; background: #ff7a1a;
+  transition: width 0.35s ease;
+}
+.survey-progress-label {
+  font-size: 0.8rem; font-weight: 700; color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.survey-card {
+  background: rgba(255, 255, 255, 0.96); border-radius: 20px; padding: 20px 18px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  display: flex; flex-direction: column; gap: 12px;
+}
+@keyframes survey-slide-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.survey-slide-in { animation: survey-slide-in 0.3s ease; }
+
+@keyframes survey-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+.survey-shake { animation: survey-shake 0.4s ease; }
+
+.survey-question { font-size: 1.05rem; font-weight: 700; color: #4a2f19; line-height: 1.4; }
+
+.survey-input {
+  width: 100%; padding: 12px 14px; border: 2px solid #ffd9b3; border-radius: 14px;
+  font-size: 1rem; font-family: inherit; background: #fffaf4; color: #4a2f19;
+}
+.survey-input:focus { outline: none; border-color: #ff7a1a; }
+.survey-textarea { resize: vertical; min-height: 84px; }
+
+.survey-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.survey-choice-btn {
+  /* F2 접근성: 원래 #a0764f는 배경 #fffaf4에서 3.89:1로 4.5:1 미달 — #7a3a0c로 보정 */
+  padding: 10px 16px; border: 2px solid #ffd9b3; border-radius: 999px;
+  background: #fffaf4; color: #7a3a0c; font-size: 0.92rem; font-weight: 600;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.survey-choice-btn:active { transform: scale(0.96); }
+.survey-choice-btn.selected {
+  background: #ff7a1a; border-color: #ff7a1a; color: #fff; transform: scale(1.04);
+}
+
+.survey-stars { display: flex; gap: 6px; justify-content: center; padding: 6px 0; }
+.survey-star-btn {
+  font-size: 2rem; line-height: 1; color: #ffe3c7; background: none; border: none;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.survey-star-btn.filled { color: #ff7a1a; transform: scale(1.12); }
+.survey-star-btn:active { transform: scale(0.9); }
+
+.survey-error {
+  font-size: 0.82rem; color: #e03131; font-weight: 700; margin: -4px 0 0;
+}
+
+.survey-next-btn {
+  align-self: stretch; padding: 13px; border: none; border-radius: 16px;
+  background: #ff7a1a; color: #fff; font-size: 1rem; font-weight: 700;
+  transition: transform 0.15s ease;
+}
+.survey-next-btn:active { transform: scale(0.97); }
+
+/* --- S4. 완료 화면 --- */
+#btn-restart {
+  position: absolute; bottom: max(28px, env(safe-area-inset-bottom)); left: 50%;
+  transform: translateX(-50%); z-index: 3;
+  padding: 12px 32px; border: none; border-radius: 24px;
+  background: #ff7a1a; color: #fff; font-size: 1rem; font-weight: 700;
+  box-shadow: 0 6px 18px rgba(255, 122, 26, 0.4);
+  animation: survey-slide-in 0.4s ease;
+}
+
+/* --- 카드 마커 모드 (MindAR) ---
+   #screen-marker는 data-screen 상태머신과 무관하게 main.js가 style.display를 직접 토글한다
+   (flow.js의 SCREENS는 건드리지 않는다). DOM에서 #screen-ar보다 앞에 두어, 카드 인식 후
+   #screen-ar(말풍선/다음 버튼)가 z-index 없이도 자연스럽게 위에 그려지도록 한다. */
+#screen-marker { position: fixed; inset: 0; background: #111; display: none; }
+#marker-container { position: absolute; inset: 0; }
+#marker-hint {
+  /* F2 접근성: 원래 #e8590c는 흰 배경에서 3.58:1로 4.5:1 미달 — #a83c08로 보정 */
+  position: absolute; top: max(24px, env(safe-area-inset-top)); left: 16px; right: 16px;
+  z-index: 2; text-align: center;
+  background: rgba(255, 255, 255, 0.92); border-radius: 20px; padding: 14px 18px;
+  font-weight: 700; color: #a83c08; box-shadow: 0 10px 28px rgba(232, 89, 12, 0.18);
+}
+#btn-marker-fallback {
+  position: absolute; bottom: max(28px, env(safe-area-inset-bottom)); left: 50%;
+  transform: translateX(-50%); z-index: 2;
+  padding: 12px 22px; border: none; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.85rem; font-weight: 600;
+}
+
+/* --- WebXR hit-test 바닥인식 모드 (Android, 베타) --- */
+#btn-xr {
+  position: absolute; right: max(14px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom)); z-index: 2;
+  padding: 9px 16px; border: none; border-radius: 999px;
+  background: rgba(30, 20, 10, 0.55); color: #fff;
+  font-size: 0.78rem; font-weight: 700; font-family: inherit;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+#btn-xr:disabled { opacity: 0.6; }
+
+/* XR 세션 동안 기존 자이로 오버레이용 카메라/캔버스는 숨김 — XR 패스스루가 대체 */
+body.xr-active #camera-video,
+body.xr-active #three-canvas {
+  display: none;
+}
+#xr-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* 설문 전송 실패 시 재시도 버튼 — btn-next와 같은 자리·모양 */
+#btn-retry {
+  position: absolute; bottom: max(28px, env(safe-area-inset-bottom)); left: 50%;
+  transform: translateX(-50%); z-index: 3;
+  padding: 12px 32px; border: none; border-radius: 24px;
+  background: #ff7a1a; color: #fff; font-size: 1rem; font-weight: 700;
+  box-shadow: 0 6px 18px rgba(255, 122, 26, 0.4);
+}
+
+/* --- 효과음 토글 (AR 화면 상단 우측, #btn-xr의 하단 우측과 대칭되는 위치) --- */
+#btn-sound {
+  position: absolute; right: max(14px, env(safe-area-inset-right));
+  top: max(14px, env(safe-area-inset-top)); z-index: 5;
+  width: 40px; height: 40px; border: none; border-radius: 50%;
+  background: rgba(30, 20, 10, 0.55); color: #fff;
+  font-size: 1.05rem; line-height: 1; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+#btn-sound:active { transform: scale(0.92); }
+#btn-sound.is-muted { opacity: 0.6; }
+
+@media (prefers-reduced-motion: reduce) {
+  #btn-sound { transition: none; }
+}
+
+/* =====================================================================
+   D팩 — 견고화 · E2 매직미러 파라미터 · F3 비AR 폴백 (agent/robust append)
+   ===================================================================== */
+
+/* --- 한정성 문구 (시작 화면) --- */
+#start-scarcity {
+  /* F2 접근성: 원래 #e8590c는 흰 배경에서 3.58:1로 4.5:1 미달 — #a83c08로 보정 */
+  font-size: 0.78rem; font-weight: 700; color: #a83c08;
+  background: rgba(255, 255, 255, 0.7); padding: 4px 14px; border-radius: 999px;
+  animation: fadeUp 0.7s ease 0.2s both;
+}
+
+/* --- 카메라 없이 참여하기 (F3 비AR 폴백 진입 링크) --- */
+#btn-no-camera {
+  /* F2 접근성: 원래 #a0592a는 배경 그라데이션에서 3.18:1로 4.5:1 미달 — #7a3a0c로 보정 */
+  font-size: 0.85rem; font-weight: 700; color: #7a3a0c; text-decoration: underline;
+  text-underline-offset: 3px; margin-top: 2px; cursor: pointer;
+}
+#btn-no-camera:active { opacity: 0.7; }
+
+/* --- 온보딩 1장 (최초 방문 1회) --- */
+#onboarding {
+  position: fixed; inset: 0; z-index: 200;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.5), transparent 40%),
+    linear-gradient(160deg, #fff7ef 0%, #ffe3c7 55%, #ffbb70 100%);
+}
+.onboarding-content {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 22px; padding: 32px 24px; text-align: center;
+}
+/* F2 접근성: 원래 #e8590c는 배경 그라데이션 어두운 쪽에서 large-text 기준(3:1)도 미달 — #a83c08로 보정 */
+#onboarding-title { font-size: 1.3rem; font-weight: 800; color: #a83c08; }
+#onboarding-steps { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 320px; }
+.onboarding-step {
+  display: flex; align-items: center; gap: 14px; text-align: left;
+  background: rgba(255, 255, 255, 0.85); border-radius: 16px; padding: 12px 16px;
+  box-shadow: 0 6px 16px rgba(232, 89, 12, 0.12);
+}
+.onboarding-step-icon { font-size: 1.6rem; line-height: 1; }
+.onboarding-step-text { font-size: 0.92rem; font-weight: 600; color: #4a2f19; }
+#btn-onboarding-start {
+  margin-top: 4px; padding: 14px 36px; border: none; border-radius: 999px;
+  background: linear-gradient(135deg, #ff9d4d, #ff7a1a 55%, #f2540a);
+  color: #fff; font-size: 1rem; font-weight: 700; font-family: inherit;
+  box-shadow: 0 10px 24px rgba(232, 89, 12, 0.4);
+}
+#btn-onboarding-start:active { transform: scale(0.97); }
+
+/* --- 전역 에러 가드 화면 --- */
+#error-screen {
+  position: fixed; inset: 0; z-index: 300;
+  background: linear-gradient(160deg, #fff3e8 0%, #ffd9b3 100%);
+}
+.error-content {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 32px; text-align: center;
+}
+.error-img { width: 120px; height: 120px; object-fit: contain; filter: drop-shadow(0 10px 16px rgba(232, 89, 12, 0.3)); }
+.error-message { font-size: 1.05rem; font-weight: 700; color: #4a2f19; }
+#btn-error-restart {
+  padding: 13px 34px; border: none; border-radius: 999px;
+  background: #ff7a1a; color: #fff; font-size: 1rem; font-weight: 700;
+  box-shadow: 0 8px 20px rgba(232, 89, 12, 0.35);
+}
+#btn-error-restart:active { transform: scale(0.97); }
+
+/* --- F3 비AR 최후 폴백: 설문 직행 화면 (그라데이션 배경) --- */
+#screen-survey-direct {
+  position: fixed; inset: 0; display: none;
+  background: linear-gradient(160deg, #fff7ef 0%, #ffd9b3 45%, #ff9d4d 100%);
+  overflow-y: auto;
+}
+.direct-survey-content {
+  min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; padding: 32px 20px;
+}
+.direct-survey-content h2 { font-size: 1.2rem; font-weight: 800; color: #7a3a0c; text-align: center; }
+#survey-panel-direct, #direct-done { width: 100%; max-width: 380px; }
+/* display를 무조건 선언하면 hidden 속성이 무력화되므로(.google-form-link 주석 참고) :not([hidden])로 범위를 좁힌다 */
+#direct-done {
+  background: rgba(255, 255, 255, 0.92); border-radius: 20px; padding: 24px 20px;
+  flex-direction: column; align-items: center; gap: 12px; text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+#direct-done:not([hidden]) { display: flex; }
+.direct-done-message { font-size: 1rem; font-weight: 700; color: #4a2f19; }
+#direct-fail-message { font-size: 0.88rem; color: #e03131; font-weight: 600; }
+#btn-direct-restart {
+  padding: 12px 32px; border: none; border-radius: 24px;
+  background: #ff7a1a; color: #fff; font-size: 1rem; font-weight: 700;
+  box-shadow: 0 6px 18px rgba(255, 122, 26, 0.4);
+}
+
+/* --- 완료·에러·전송실패 공통: 구글 폼 직접 링크 (formId 미설정 시 main.js가 hidden 처리) ---
+   주의: display를 항상 선언하면 작성자 스타일이 UA의 [hidden]{display:none}보다 우선해
+   hidden 속성이 무력화된다(출처 우선순위상 author normal이 UA normal을 항상 이김) —
+   반드시 :not([hidden])로 범위를 좁혀서 hidden일 땐 이 규칙이 아예 매치되지 않게 한다. */
+.google-form-link {
+  /* F2 접근성: 원래 #e8590c는 흰 배경에서 3.58:1로 4.5:1 미달 — #a83c08로 보정 */
+  padding: 10px 20px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9); color: #a83c08; font-size: 0.85rem; font-weight: 700;
+  text-decoration: none; box-shadow: 0 4px 14px rgba(232, 89, 12, 0.2);
+}
+.google-form-link:not([hidden]) { display: inline-block; }
+#done-panel {
+  position: absolute; bottom: 96px; left: 50%; transform: translateX(-50%); z-index: 3;
+}
+/* display는 hidden 속성을 이기지 않도록 :not([hidden])에만 — .google-form-link와 동일한 이유 */
+#done-panel:not([hidden]) {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+#btn-capture {
+  padding: 12px 26px; border: none; border-radius: 999px;
+  background: linear-gradient(135deg, #ff9d4d, #ff7a1a 55%, #f2540a); color: #fff;
+  font-size: 0.95rem; font-weight: 700; font-family: inherit;
+  box-shadow: 0 8px 20px rgba(232, 89, 12, 0.35);
+}
+#btn-capture:active { transform: scale(0.96); }
+
+/* --- 설문 개인정보 동의 카드 --- */
+.survey-consent-notice {
+  list-style: none; display: flex; flex-direction: column; gap: 6px;
+  background: #fff6ec; border: 1px solid #ffd9b3; border-radius: 12px;
+  padding: 12px 14px; font-size: 0.82rem; line-height: 1.45; color: #5a4433;
+}
+.survey-consent-notice li::before { content: '· '; color: #a83c08; font-weight: 700; }
+.survey-consent-agree {
+  display: flex; align-items: center; gap: 10px; padding: 10px 4px;
+  font-size: 0.95rem; font-weight: 700; color: #4a2f19; cursor: pointer;
+}
+.survey-consent-check { width: 20px; height: 20px; accent-color: #ff7a1a; }
+
+/* 시작 화면 브랜드 라인 — 회사·세계관 노출 (영업 리뷰 반영) */
+.brand-line { font-size: 0.72rem; font-weight: 600; color: #7a3a0c; opacity: 0.85; margin-top: 6px; }
+
+/* --- WebXR 바닥인식 트래킹 힌트 (15초 미검출) --- */
+#xr-hint {
+  position: absolute; bottom: 84px; left: 16px; right: 16px; z-index: 2; text-align: center;
+  background: rgba(30, 20, 10, 0.72); color: #fff; backdrop-filter: blur(4px);
+  border-radius: 16px; padding: 12px 16px; font-size: 0.85rem; font-weight: 600;
+}
+
+/* --- 마커 버튼 로딩 상태 (마커 씬 dynamic import 대기 중) --- */
+#btn-marker.btn-loading { cursor: wait; }
+#btn-marker.btn-loading .badge-soon { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  #start-scarcity,
+  #btn-onboarding-start:active,
+  #btn-error-restart:active {
+    animation: none !important;
+  }
+}
+
+/* =====================================================================
+   F팩 — 다국어(ko/en) · 접근성 (agent/i18n append)
+   ===================================================================== */
+
+/* --- 언어 토글 (시작 화면 우상단, 🌐 ko↔en) --- */
+.lang-toggle {
+  position: absolute; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
+  z-index: 2;
+  padding: 8px 14px; border: none; border-radius: 999px; font-family: inherit;
+  background: rgba(255, 255, 255, 0.85); color: #7a3a0c; font-size: 0.8rem; font-weight: 700;
+  cursor: pointer; box-shadow: 0 4px 12px rgba(232, 89, 12, 0.15);
+  transition: transform 0.15s ease;
+}
+.lang-toggle:active { transform: scale(0.94); }
+
+/* --- 키보드 포커스 링 (F2) — 마우스 클릭 시엔 안 보이고(:focus-visible) 키보드/스위치 탐색
+   시에만 뚜렷하게 보인다. 브랜드 오렌지와 구분되도록 파란 계열로 통일. --- */
+button:focus-visible,
+a:focus-visible,
+.survey-input:focus-visible,
+.survey-textarea:focus-visible {
+  outline: 3px solid #2a6df5;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lang-toggle { transition: none; }
+}

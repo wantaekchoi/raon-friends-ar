@@ -1,0 +1,37 @@
+# CURRENT_STATE
+
+> 완료된 상태만 기록한다. 다음 작업은 [NEXT_STEP.md](NEXT_STEP.md), 결정 배경은 [adr/](adr/) 참고.
+
+**최종 갱신**: 2026-07-20
+
+## 완료된 것
+
+- **설계서 확정** — [`docs/design.md`](design.md): 전체 개요·캐릭터 3종 역할·시스템 구성도·화면 설계(S1~S4)·설문 설계·3D 파이프라인·저장소 구조·개발 일정·리스크 대응까지 13개 섹션 확정.
+- **배포 파이프라인** — Vite 6 프로젝트 뼈대 + `.github/workflows/deploy.yml` (main push → `npm ci` → `npm test` → `npm run build` → GitHub Pages 자동 배포). `vite.config.js`에 `base: '/raon-friends-ar/'` 반영.
+- **S1 시작 화면** — 타이틀 + 캐릭터 3종 썸네일(`public/img/raong.png`, `raoni.png`, `raona.png`) + [바로 만나기]/[카드로 소환하기(준비 중, 비활성)] 버튼. `src/config.js`로 타이틀·멘트·캐릭터 정보 관리.
+- **화면 흐름 상태머신** — `src/flow.js`: `SCREENS`(START/GUIDE/SURVEY/DONE) + `createFlow()` (`start()`/`next()`/`finishSurvey()`/`reset()`).
+- **오버레이 AR 화면** — `src/scenes/overlay.js`: `getUserMedia` 후면 카메라 배경(거부 시 그라데이션 폴백) + three.js 투명 캔버스 오버레이 + 등장 바운스·대기 숨쉬기 모션.
+- **라옹 3D 모델 로드 + 렌더링 수정** — `src/characters.js`: FBXLoader로 `public/models/raong.fbx` 직접 로드, 로드 실패 시 임시 캡슐 캐릭터로 자동 폴백. 검정 렌더링 원인 2건 해결: ①vertexColors 요구하지만 정점색 데이터가 없는 메시는 머티리얼 clone 후 `vertexColors=false` ②`m.map`은 있지만 이미지가 깨진 임베디드 텍스처만 외부 텍스처로 교체. 레퍼런스 렌더와 일치 확인.
+- **말풍선 안내 진행** — `src/ui/bubble.js`: 화자 이름 + 타이핑 효과로 `guideScript` 멘트를 순차 노출, [다음] 버튼으로 진행.
+- **설문(S3)·완료(S4) 화면** — `src/survey.js`: 카드형 문항(동의/단답/객관식/별점/장문, 이후 7문항으로 확장 — 아래 참고) + 진행 바 + 필수 검증(shake) + 구글 폼 no-cors 전송(1회 재시도, `formId`가 비어있거나 `REPLACE_ME`면 자동 생략) + 완료 화면 [처음으로] 리셋.
+- **시작 화면 폴리시** — 그라데이션 배경 + 플로팅 캐릭터(이름표·탭 바운스) + CTA glow 펄스 + `prefers-reduced-motion` 대응.
+- **행사 제출 문서** — 신청서 문안·영상 스토리보드는 내부 보관(비공개 — 공개 저장소 미포함), README + QR(`docs/qr-prod.png`).
+- **프로덕션 배포** — https://wantaekchoi.github.io/raon-friends-ar/ 라이브 (public repo, main push → Actions → Pages 자동 배포, Pages 자동 활성화 enablement 포함). 회사 원본 자산 48MB는 git 히스토리에서 제거됨.
+- **3캐릭터 배턴터치** — `loadCharacter(key)` 일반화(라옹·라오니·라오나), guideScript `speaker` 전환 시 교대 등장, 무광 머티리얼(shininess≤8·roughness≥0.9).
+- **지면 앵커 (포켓몬GO식)** — 캐릭터를 2.7m 앞 바닥(y=0)에 배치 + 접지 그림자 + 자이로 시점(iOS 권한 처리 포함, 미지원 시 고정 구도 폴백).
+- **카드 마커 모드 (MindAR)** — 카드 3장 디자인 + `cards.mind` 컴파일(방법: docs/marker-setup.md) + `src/scenes/marker.js` + 인쇄용 `docs/cards-print.pdf`. 인식 실패 시 오버레이 폴백 버튼.
+- **WebXR 바닥인식 (Android, 베타)** — hit-test 레티클 → 탭 배치 → SLAM 고정. 지원 기기에서만 버튼 노출, dom-overlay로 기존 UI 유지.
+- **README 스크린샷 갤러리** — docs/screenshots/ 3장.
+- **개선 배치(2차)** — 별점 리액션(cheer/sad)·쓰다듬기·하트/별 파티클·본 기반 모션 3종 추가 / WebAudio 효과음 4종+🔊토글 / 카드 수집카드풍 리디자인(특징점 31~45pt 균일)·기념 스크린샷·멀티 카드(maxTrack 3)·대시보드(dashboard.html, 데모 모드) / 오프라인 응답 큐·전역 에러 가드·온보딩·키오스크(?kiosk=1)·비AR 설문 직행+구글폼 직접 링크·SW 캐시·마커 지연 로드(초기 번들 2.7MB→618KB) / 자이언트 모드(?size=life|giant)·매직미러(?camera=user) / 펀펀 가디언즈 세계관 반영 / 라오나 피부톤 수정.
+- **다국어(ko/en) + 접근성 (F1·F2)** — `src/i18n.js`: 멘트·설문 문항·전 UI 문구를 `STRINGS.ko`/`STRINGS.en` 사전으로 이전, `currentLang()`(`?lang=` > `navigator.language` > `ko`) + `t()` dot-path 조회 + 플레이스홀더 치환. 시작 화면 🌐 토글(URL 갱신 후 reload로 재판별). 접근성: 상태 변화 요소에 `aria-live="polite"`(말풍선·마커 힌트·XR 힌트·비AR 직행 실패 메시지), `:focus-visible` 키보드 포커스 링, `prefers-reduced-motion`에서 파티클 burst 스킵·리액션 모션 진폭 축소(완전 정지는 아님).
+- **구글 폼 실연결** — `src/config.js`의 `GOOGLE_FORM`에 실제 formId + entry ID 6종(성함·소속·연락처·별점·인상깊은점·의견) 반영 완료. "기타" 자유입력 옵션은 구글 규격(`__other_option__` + `.other_option_response` 쌍)으로 전송(`buildFormBody`). 단, 개인정보 동의 문항은 아직 entry ID가 없어 스프레드시트에는 기록되지 않음 — [NEXT_STEP.md](NEXT_STEP.md) 참고.
+- **개인정보 수집·이용 동의 카드** — 설문 첫 문항으로 추가돼 총 7문항 체계(동의→별점→인상깊은점→의견→성함→소속→연락처)로 재배열. 영어 UI에서도 구글 폼 원문(한국어) 값으로 전송(`submitValue`).
+- **적대 리뷰 3건 반영** — 기획·영업 리뷰: 행사 안내 멘트·경품 추첨 안내 문구·문항 순서 재배열(선택형 우선)·캐릭터 로딩 대기 문구·브랜드 라인(`CONFIG.ui.brandLine`)·자산 고지. 개발 리뷰: `public/sw.js` cache-first → stale-while-revalidate 전환(CACHE_NAME v2, 재방문 시 자산 갱신 반영), `submitAndRetry`의 재시도 무한 대기 탈출구(첫 실패 시 [처음으로]·키오스크 리셋 즉시 노출), `queue.js`의 동시 flush 직렬화(`flushInFlight`), 대시보드 CSV 헤더-문항 불일치 경고 배지, 대시보드 csvUrl 개인정보 노출 경고 주석.
+- **README 전면 현행화** — 3체험 모드·마커 카드·URL 파라미터·대시보드·매직미러 부스 레시피·저장소 구조 반영.
+- **대시보드 데모 데이터 게이팅** — `?demo=1`을 붙였을 때만 데모 숫자 노출, 기본은 "연동 대기" 안내만 표시(공개 URL에서 가짜 숫자가 실데이터처럼 보이지 않도록).
+- **동의 기록 폼 연결 (2026-07-20)** — 구글 폼에 동의 문항(첫 위치·필수·옵션 '동의합니다') 추가, `entries.privacyConsent` 연결, 실전송으로 시트 H열 기록 검증. 응답 탭 `responses` 개명(폼 연동 유지), 개인정보 제외 `public` 집계 탭 웹 게시 → 대시보드 실시간 연동 검증. cmux 내장 브라우저 자동화로 수행.
+- **테스트 59개** (flow 5 + survey 21 + consent 4 + i18n 14 + sound 7 + queue 8) + 통합 헤드리스 검증(온보딩→AR→별점 리액션→완료) 에러 0건.
+
+## 아직 안 된 것
+
+[NEXT_STEP.md](NEXT_STEP.md) 참고. 요약: 구글 폼 동의 문항 entry 연결, 대시보드 시트 연동(csvUrl), 실기기 테스트, 시연 영상·신청서 제출, 별점 1~2점 "sad" 리액션 유지 여부 결정.
