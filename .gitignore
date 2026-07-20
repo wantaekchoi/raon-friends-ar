@@ -1,3 +1,5 @@
 node_modules/
 dist/
 .DS_Store
+.superpowers/
+scripts/e2e/.screenshots/
