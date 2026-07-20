@@ -13,6 +13,7 @@ import { buildSoloGuideScript } from './solo-character.js';
 import { scaledMs } from './app/timing.js';
 import { STORAGE_KEYS } from './app/storage-keys.js';
 import { createRouter } from './app/router.js';
+import { asScene, NullScene } from './app/scenes.js';
 
 // F1 다국어 — html lang·문서 제목을 현재 언어에 맞춘다 (CONFIG.lang은 config.js가 모듈 로드
 // 시점에 currentLang()으로 이미 판별해 둔 값).
@@ -58,7 +59,7 @@ function showErrorScreen(err) {
   if (errorScreenShown) return; // 중복 표시 방지(같은 에러가 반복 발생해도 화면은 1회만)
   errorScreenShown = true;
   try {
-    activeScene?.stopCamera?.(); // 크래시 상황에서도 카메라 스트림은 반드시 해제
+    activeScene.stopCamera(); // 크래시 상황에서도 카메라 스트림은 반드시 해제
   } catch {
     // stopCamera 자체가 실패해도 에러 화면 노출은 계속 진행
   }
@@ -99,10 +100,10 @@ const router = createRouter(document.body);
 // 일어나므로 진행 중인 상태를 끊을 위험이 없다) — 그래서 const가 아니라 let이다.
 let flow = createFlow(guideScript);
 let overlay = null;
-// 현재 캐릭터 배턴터치 호출을 받는 활성 씬 — 기본은 자이로 오버레이, WebXR 바닥인식
-// 모드가 켜져있는 동안엔 webxr.js의 컨트롤러로 바뀐다. 두 씬 모두 setCharacter/playEntrance
-// 인터페이스를 동일하게 노출하므로 ensureCharacter는 이 변수만 바라보면 된다.
-let activeScene = null;
+// 현재 캐릭터 배턴터치 호출을 받는 활성 씬 — 기본은 NullScene(전 메서드 no-op), 오버레이/
+// WebXR 진입 시 app/scenes.js의 asScene()으로 감싸 교체한다. 모든 씬이 SCENE_METHODS를
+// 동일하게 노출하므로 호출부는 `?.` 가드 없이 이 변수만 바라보면 된다.
+let activeScene = NullScene;
 
 // 캐릭터 배턴터치: 최초 필요 시점에만 로드하고 이후엔 캐시에서 재사용한다.
 const characterCache = new Map();
@@ -112,7 +113,7 @@ let characterLoading = false;
 // speaker가 currentSpeaker와 다를 때만 로드/전환한다. 로드 중 중복 클릭 방지를 위해
 // characterLoading 플래그로 btn-next를 잠근다.
 async function ensureCharacter(speaker) {
-  if (!activeScene || speaker === currentSpeaker) return;
+  if (activeScene === NullScene || speaker === currentSpeaker) return;
 
   characterLoading = true;
   const nextBtn = document.getElementById('btn-next');
@@ -133,7 +134,7 @@ async function ensureCharacter(speaker) {
     // 800ms 사이 씬이 전환됐으면 발화하지 않는다 — 엉뚱한 씬에 wave가 걸리는 것 방지.
     const sceneAtLoad = activeScene;
     setTimeout(() => {
-      if (sceneAtLoad === activeScene) sceneAtLoad.playMotion?.('wave');
+      if (sceneAtLoad === activeScene) sceneAtLoad.playMotion('wave');
     }, 800);
   }
 
@@ -389,7 +390,7 @@ async function startOverlayFlow() {
     ...(characterHeight !== undefined && { characterHeight }),
     ...(cameraFacingParam !== undefined && { cameraFacing: cameraFacingParam }),
   });
-  activeScene = overlay;
+  activeScene = asScene(overlay);
   {
     const hintEl = document.getElementById('xr-hint');
     let hintText = null;
@@ -449,7 +450,8 @@ document.getElementById('btn-overlay').addEventListener('click', startOverlayFlo
 
 // 카드 하이브리드 플로우 — 마커 세션(캐릭터는 카드에 부착)을 살려둔 채 가이드·설문 UI(#screen-ar)만
 // 그 위에 얹는다. overlay 전용 요소(카메라 비디오·캔버스·기념사진)는 data-mode="marker-flow" CSS로 숨긴다.
-// activeScene은 null 유지 — ensureCharacter/모션 호출은 기존 null 가드로 자연스럽게 생략된다.
+// activeScene은 NullScene(기본값) 유지 — ensureCharacter는 NullScene 비교로 조기 반환하고,
+// 모션·연출 호출은 NullScene의 no-op 메서드로 자연스럽게 흡수된다.
 function startMarkerFlow(key) {
   history.pushState({ ar: true }, ''); // 하드웨어 뒤로가기 → 홈 (오버레이 플로우와 동일)
   router.setMode('marker-flow');
@@ -462,7 +464,7 @@ function startMarkerFlow(key) {
 
 // 🏠 홈 — AR/마커 어디서든 처음 화면으로. 카메라·세션을 정리하는 가장 안전한 방법은 reload.
 function goHome() {
-  try { activeScene?.stopCamera?.(); markerSession?.stop(); } catch { /* 정리 실패해도 리로드는 진행 */ }
+  try { activeScene.stopCamera(); markerSession?.stop(); } catch { /* 정리 실패해도 리로드는 진행 */ }
   location.reload();
 }
 {
@@ -803,10 +805,10 @@ async function startSurvey() {
     syncScreen();
     await ensureCharacter(surveySpeaker); // 완료 화면도 진행 캐릭터가 인사
     showLine({ speaker: surveySpeaker, text: CONFIG.ui.doneMessage });
-    // 마커 모드는 activeScene 없이 진행되므로 null 가드 필수
-    activeScene?.playMotion?.('jump'); // 감사 인사와 함께 기쁨의 점프
+    // 마커 모드는 NullScene 위에서 진행되므로 이 호출들은 조용히 no-op된다
+    activeScene.playMotion('jump'); // 감사 인사와 함께 기쁨의 점프
     sound.play('boing');
-    activeScene?.burst?.('heart');
+    activeScene.burst('heart');
     // 카메라 스트림은 [처음으로]에서 해제 — 완료 화면의 [📸 기념사진]이 카메라 프레임을 쓰기 때문.
     // 무인 운영의 발열·배터리는 키오스크 무입력 리셋이 처리한다.
     document.getElementById('btn-restart').hidden = false;
@@ -821,12 +823,12 @@ function reactionsFor() {
       if (key !== 'rating') return;
       const n = Number(value);
       if (n >= 4) {
-        activeScene?.playMotion?.('cheer');
-        activeScene?.burst?.('heart');
+        activeScene.playMotion('cheer');
+        activeScene.burst('heart');
         sound.play('twinkle');
       } else if (n <= 2) {
-        activeScene?.playMotion?.('sad');
-        setTimeout(() => activeScene?.playMotion?.('wave'), 1100); // 시무룩 후 다시 힘내기
+        activeScene.playMotion('sad');
+        setTimeout(() => activeScene.playMotion('wave'), 1100); // 시무룩 후 다시 힘내기
       }
     },
   };
@@ -844,7 +846,7 @@ document.getElementById('btn-capture').addEventListener('click', async () => {
 });
 
 document.getElementById('btn-restart').addEventListener('click', () => {
-  activeScene?.stopCamera?.(); // 리셋 직전 카메라 스트림 해제
+  activeScene.stopCamera(); // 리셋 직전 카메라 스트림 해제
   markerSession?.stop(); // 마커 플로우로 완주한 경우의 카메라 해제 (goHome과 동일)
   location.reload();
 });
@@ -920,7 +922,7 @@ btnXR.addEventListener('click', async () => {
       // XR 씬에 캐릭터가 재소속되며 overlay 씬에서 빠졌을 수 있으니 다시 붙여준다.
       router.setMode(null); // scenes/webxr.js의 cleanup() 직후 호출되는 시점과 동일한 순서
       hideXRHint();
-      activeScene = overlay;
+      activeScene = asScene(overlay);
       overlay.resume();
       const restored = characterCache.get(currentSpeaker);
       if (restored) {
@@ -941,7 +943,7 @@ btnXR.addEventListener('click', async () => {
   // router.setMode('xr')는 onSessionGranted 콜백으로 scenes/webxr.js 내부에서 이미
   // (appendChild·setSession await 이전 시점에) 동기 호출됐다 — 여기서 다시 부르지 않는다.
   overlay.pause();
-  activeScene = xr;
+  activeScene = asScene(xr);
   btnXR.hidden = true;
   btnXR.disabled = false;
 
