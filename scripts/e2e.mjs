@@ -13,6 +13,8 @@ const scenarioModules = [
   './e2e/scenarios/s6-params.mjs',
   './e2e/scenarios/s7-gyro-fake.mjs',
   './e2e/scenarios/s8-marker-summon.mjs',
+  './e2e/scenarios/s9-error-screen.mjs',
+  './e2e/scenarios/s10-kiosk-reset.mjs',
 ];
 
 execSync('npm run build', { stdio: 'inherit' });

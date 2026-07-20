@@ -42,7 +42,12 @@ export async function stopApp() {
 }
 
 // 시나리오 하나가 쓰는 격리 페이지 — incognito 컨텍스트라 localStorage가 매번 깨끗하다.
-export async function withPage(fn, { params = '' } = {}) {
+//
+// allowErrors: 정규식 배열(옵션, 기본값 없음=기존 동작 그대로). "콘솔/페이지 에러 0건" 원칙의
+// 예외를 시나리오 단위로 아주 좁게만 열어주는 용도 — 지금은 S9(전역 에러 화면)가 스스로 주입한
+// 에러(정확히 그 메시지 문자열)만 허용하는 데 쓴다. 패턴에 매칭되지 않는 에러는 이 옵션을 켜도
+// 여전히 실패로 취급된다.
+export async function withPage(fn, { params = '', allowErrors } = {}) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
   await page.setViewport({ width: 390, height: 844 });
@@ -68,7 +73,11 @@ export async function withPage(fn, { params = '' } = {}) {
     await fn(page, ctx);
     // 콘솔/페이지 에러 0건 원칙. 유일한 예외는 위의 /favicon.ico 404 한 건뿐이며(앱에 favicon이
     // 없어 브라우저 자동 요청이 항상 404) — 그 외 어떤 리소스 404·에러도 전부 실패로 취급한다.
-    if (errors.length) throw new Error(`콘솔/페이지 에러 ${errors.length}건:\n${errors.join('\n')}`);
+    // allowErrors가 주어지면 그 패턴에 매칭되는 항목만 추가로 걸러내고, 나머지는 그대로 실패시킨다.
+    const unexpected = allowErrors
+      ? errors.filter((e) => !allowErrors.some((re) => re.test(e)))
+      : errors;
+    if (unexpected.length) throw new Error(`콘솔/페이지 에러 ${unexpected.length}건:\n${unexpected.join('\n')}`);
   } finally {
     await context.close();
   }

@@ -21,6 +21,22 @@ export async function run() {
   await withPage(async (page) => {
     const label = await page.evaluate(() => document.getElementById('btn-overlay-label').textContent);
     if (/만나러/.test(label)) throw new Error(`en인데 한국어 라벨: ${label}`);
+    // #btn-lang-toggle 실제 클릭 → start-screen.js가 ?lang=을 반대 언어로 바꾸고
+    // location.href를 재대입해 리로드한다(모듈 최상위에서 언어를 한 번만 평가하는 config.js
+    // 구조상 reload가 유일한 전환 경로 — src/app/start-screen.js 참조).
+    // 온보딩(최초 방문 오버레이)이 화면을 덮고 있으면 그 뒤의 버튼 클릭이 온보딩 배경에
+    // 가로채여 아무 반응이 없다 — 먼저 닫아야 한다.
+    await dismissOnboarding(page);
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 15000 }),
+      page.click('#btn-lang-toggle'),
+    ]);
+    const toggled = await page.evaluate(() => ({
+      label: document.getElementById('btn-overlay-label').textContent,
+      lang: new URL(location.href).searchParams.get('lang'),
+    }));
+    if (!/만나러/.test(toggled.label)) throw new Error(`토글 후 한국어 라벨 아님: ${toggled.label}`);
+    if (toggled.lang !== 'ko') throw new Error(`토글 후 URL lang 파라미터 미반영: ${toggled.lang}`);
   }, { params: '?lang=en' });
 
   await withPage(async (page) => {
