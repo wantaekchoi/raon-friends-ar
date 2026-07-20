@@ -330,7 +330,15 @@ async function submitAndRetry(answers, { onMessage, retryParent, onFail }) {
 // (스트림·렌더러·리스너가 두 세트 생겨 리소스 누수)
 let overlayEntering = false;
 
-document.getElementById('btn-overlay').addEventListener('click', async () => {
+// 소환/URL(?char=) 공통 — 안내 전체를 한 캐릭터로 고정한다 (가이드 시작 전에 호출).
+// flow는 guideScript 항목 객체를 그대로 참조하므로 speaker를 제자리에서 바꾸면 즉시 반영된다.
+function lockGuideToCharacter(key) {
+  if (!CONFIG.characters[key]) return;
+  guideScript.forEach((line) => { line.speaker = key; });
+}
+
+// 오버레이 진입 공통 흐름 — 시작 버튼과 카드 소환 전환이 함께 사용한다.
+async function startOverlayFlow() {
   if (overlayEntering) return;
   overlayEntering = true;
   flow.start();
@@ -354,7 +362,9 @@ document.getElementById('btn-overlay').addEventListener('click', async () => {
   if (await isXRSupported()) {
     document.getElementById('btn-xr').hidden = false;
   }
-});
+}
+
+document.getElementById('btn-overlay').addEventListener('click', startOverlayFlow);
 
 // ===========================================================================
 // F3 비AR 최후 폴백 — "카메라 없이 참여하기" (카메라·AR 없이도 참여 경로가 끊기지 않게)
@@ -478,14 +488,21 @@ async function enterMarkerMode() {
     markerSession = await initMarker({
       containerEl: document.getElementById('marker-container'),
       onTarget(key) {
-        if (found) return; // 첫 인식 캐릭터로 흐름 시작 — 동시에 여러 카드가 잡히는 경우는 TODO
+        if (found) return; // 첫 인식 카드가 소환 확정 — 이후 다른 카드·트래킹 소실은 무시
         found = true;
         clearTimeout(fallbackTimer);
-        hint.hidden = true;
         fallbackBtn.hidden = true;
-        flow.start();
-        syncScreen();
-        renderGuide();
+        // 소환 연출: 카드 위 등장을 잠깐 보여주고 → 오버레이 모드로 캐릭터를 데려가 계속 진행.
+        // (실시간 트래킹에 캐릭터가 나왔다 사라졌다 하지 않도록 — 실기기 피드백 2026-07-20)
+        hint.hidden = false;
+        hint.textContent = CONFIG.ui.markerSummoned.replace('{name}', CONFIG.characters[key].name);
+        sound.play('twinkle');
+        setTimeout(() => {
+          markerSession?.stop();
+          document.getElementById('screen-marker').style.display = 'none';
+          lockGuideToCharacter(key);
+          startOverlayFlow();
+        }, 1600);
       },
     });
   } catch (err) {
