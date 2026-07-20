@@ -1,11 +1,17 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif; }
 
+/* 화면 전환은 router(data-screen/data-mode)가 단독 소유 — JS의 style.display 토글 금지
+   (셸 재작성 스펙 §2, src/app/router.js). */
 section { display: none; }
 body[data-screen="start"] #screen-start { display: flex; }
 body[data-screen="guide"] #screen-ar,
 body[data-screen="survey"] #screen-ar,
 body[data-screen="done"] #screen-ar { display: block; }
+body[data-screen="marker"] #screen-marker,
+body[data-mode="marker-flow"] #screen-marker { display: block; }
+body[data-screen="vision"] #screen-vision { display: block; }
+body[data-screen="direct-survey"] #screen-survey-direct { display: block; }
 
 #screen-start {
   position: relative; overflow: hidden;
@@ -289,10 +295,11 @@ body.no-camera #screen-ar { background: linear-gradient(180deg, #2b1a3a, #6b3f8f
 }
 
 /* --- 카드 마커 모드 (MindAR) ---
-   #screen-marker는 data-screen 상태머신과 무관하게 main.js가 style.display를 직접 토글한다
-   (flow.js의 SCREENS는 건드리지 않는다). DOM에서 #screen-ar보다 앞에 두어, 카드 인식 후
-   #screen-ar(말풍선/다음 버튼)가 z-index 없이도 자연스럽게 위에 그려지도록 한다. */
-#screen-marker { position: fixed; inset: 0; background: #111; display: none; }
+   #screen-marker는 router가 소유한 data-screen="marker"(스캔 중) 또는 data-mode="marker-flow"
+   (카드 인식 후 flow.js의 SCREENS로 넘어간 뒤에도 배경 세션 유지)로 노출된다 — 위 규칙 참고.
+   DOM에서 #screen-ar보다 앞에 두어, 카드 인식 후 #screen-ar(말풍선/다음 버튼)가 z-index 없이도
+   자연스럽게 위에 그려지도록 한다. */
+#screen-marker { position: fixed; inset: 0; background: #111; }
 #marker-container { position: absolute; inset: 0; }
 #marker-hint {
   /* F2 접근성: 원래 #e8590c는 흰 배경에서 3.58:1로 4.5:1 미달 — #a83c08로 보정 */
@@ -311,16 +318,16 @@ body.no-camera #screen-ar { background: linear-gradient(180deg, #2b1a3a, #6b3f8f
 /* 카드 하이브리드 플로우: 소환 후에도 마커 세션(카드 부착 렌더링)을 배경으로 유지하고
    #screen-ar는 가이드·설문 UI만 얹는다 — overlay 전용 카메라 요소는 마커 뷰를 가리므로 숨김.
    기념사진은 overlay의 video/canvas를 합성하므로 마커 플로우에선 비활성, 🏠은 marker 쪽 버튼 사용. */
-body.marker-flow #camera-video,
-body.marker-flow #three-canvas,
-body.marker-flow #btn-capture,
-body.marker-flow #btn-home { display: none; }
+body[data-mode="marker-flow"] #camera-video,
+body[data-mode="marker-flow"] #three-canvas,
+body[data-mode="marker-flow"] #btn-capture,
+body[data-mode="marker-flow"] #btn-home { display: none; }
 
 /* --- Vision AI 인식 모드 (1단계: 구조 + mock, 2단계에서 MediaPipe 실 모델로 교체 예정) ---
-   #screen-marker와 동일한 패턴: data-screen 상태머신과 무관하게 main.js가 style.display를
-   직접 토글한다. 인식 성공 시엔 이 화면을 숨기고 오버레이 모드로 넘어가므로(marker와 달리
-   배경으로 계속 보이지 않음), z-index/겹침 걱정 없이 단순하게 유지한다. */
-#screen-vision { position: fixed; inset: 0; background: #111; display: none; }
+   #screen-marker와 달리 router가 소유한 data-screen="vision" 하나만으로 충분하다 — 인식
+   성공 시엔 이 화면을 완전히 벗어나 오버레이 모드로 넘어가므로(marker와 달리 배경으로 계속
+   보이지 않음), z-index/겹침 걱정 없이 단순하게 유지한다. */
+#screen-vision { position: fixed; inset: 0; background: #111; }
 #vision-container { position: absolute; inset: 0; }
 .vision-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 #vision-hint {
@@ -376,8 +383,8 @@ body.marker-flow #btn-home { display: none; }
 #btn-xr:disabled { opacity: 0.6; }
 
 /* XR 세션 동안 기존 자이로 오버레이용 카메라/캔버스는 숨김 — XR 패스스루가 대체 */
-body.xr-active #camera-video,
-body.xr-active #three-canvas {
+body[data-mode="xr"] #camera-video,
+body[data-mode="xr"] #three-canvas {
   display: none;
 }
 #xr-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -459,7 +466,12 @@ body.xr-active #three-canvas {
 }
 #btn-onboarding-start:active { transform: scale(0.97); }
 
-/* --- 전역 에러 가드 화면 --- */
+/* --- 전역 에러 가드 화면 ---
+   의도적으로 router(data-screen)에 편입하지 않는다: 이 화면은 flow/marker/vision 중 "지금 어느
+   화면이든" 그 위에 떠야 하는 전역 오버레이라 data-screen을 error로 덮으면 이전 화면 상태를
+   잃는다(에러 후엔 항상 새로고침이라 복귀가 필요없어 문제는 없지만, 소유권을 넘길 실익도 없다).
+   또 <section>이 아니라서 `hidden` 속성이 곧 UA 기본 display:none 역할을 하므로 그대로 둔다
+   (index.html은 이 태스크의 수정 범위 밖 — task-7-report.md 참고). */
 #error-screen {
   position: fixed; inset: 0; z-index: 300;
   background: linear-gradient(160deg, #fff3e8 0%, #ffd9b3 100%);
@@ -477,9 +489,10 @@ body.xr-active #three-canvas {
 }
 #btn-error-restart:active { transform: scale(0.97); }
 
-/* --- F3 비AR 최후 폴백: 설문 직행 화면 (그라데이션 배경) --- */
+/* --- F3 비AR 최후 폴백: 설문 직행 화면 (그라데이션 배경) ---
+   router가 소유한 data-screen="direct-survey"로 노출된다(위 규칙 참고). */
 #screen-survey-direct {
-  position: fixed; inset: 0; display: none;
+  position: fixed; inset: 0;
   background: linear-gradient(160deg, #fff7ef 0%, #ffd9b3 45%, #ff9d4d 100%);
   overflow-y: auto;
 }

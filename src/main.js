@@ -12,6 +12,7 @@ import { captureMoment } from './capture.js';
 import { buildSoloGuideScript } from './solo-character.js';
 import { scaledMs } from './app/timing.js';
 import { STORAGE_KEYS } from './app/storage-keys.js';
+import { createRouter } from './app/router.js';
 
 // F1 다국어 — html lang·문서 제목을 현재 언어에 맞춘다 (CONFIG.lang은 config.js가 모듈 로드
 // 시점에 currentLang()으로 이미 판별해 둔 값).
@@ -89,6 +90,10 @@ const cameraFacingParam = urlParams.get('camera') === 'user' ? 'user' : undefine
 let guideSpeakerLock = null;
 const guideScript = buildSoloGuideScript(soloCharParam, CONFIG);
 if (soloCharParam && CONFIG.characters[soloCharParam]) guideSpeakerLock = soloCharParam;
+
+// 화면·모드 전환의 단일 소유자(셸 재작성 스펙 §2) — 이 파일 안에서 data-screen/data-mode를
+// 직접 만지거나 인라인 style로 화면을 토글하지 않는다. 전부 router를 거친다.
+const router = createRouter(document.body);
 
 // Vision AI 인식으로 화자가 새로 고정되면 flow 자체를 새로 만들어 교체한다(가이드 시작 전에만
 // 일어나므로 진행 중인 상태를 끊을 위험이 없다) — 그래서 const가 아니라 let이다.
@@ -248,7 +253,7 @@ document.querySelectorAll('#start-chars .char-card').forEach((card) => {
 }
 
 function syncScreen() {
-  document.body.dataset.screen = flow.screen;
+  router.show(flow.screen);
 }
 
 // ===========================================================================
@@ -443,11 +448,11 @@ document.getElementById('btn-quicklook').addEventListener('click', () => {
 document.getElementById('btn-overlay').addEventListener('click', startOverlayFlow);
 
 // 카드 하이브리드 플로우 — 마커 세션(캐릭터는 카드에 부착)을 살려둔 채 가이드·설문 UI(#screen-ar)만
-// 그 위에 얹는다. overlay 전용 요소(카메라 비디오·캔버스·기념사진)는 body.marker-flow CSS로 숨긴다.
+// 그 위에 얹는다. overlay 전용 요소(카메라 비디오·캔버스·기념사진)는 data-mode="marker-flow" CSS로 숨긴다.
 // activeScene은 null 유지 — ensureCharacter/모션 호출은 기존 null 가드로 자연스럽게 생략된다.
 function startMarkerFlow(key) {
   history.pushState({ ar: true }, ''); // 하드웨어 뒤로가기 → 홈 (오버레이 플로우와 동일)
-  document.body.classList.add('marker-flow');
+  router.setMode('marker-flow');
   guideSpeakerLock = key;
   flow = createFlow(buildSoloGuideScript(key, CONFIG));
   flow.start();
@@ -483,9 +488,7 @@ btnNoCamera.addEventListener('click', (e) => {
 });
 
 function startDirectSurvey() {
-  document.getElementById('screen-start').style.display = 'none';
-  const screen = document.getElementById('screen-survey-direct');
-  screen.style.display = 'block';
+  router.show('direct-survey');
 
   const panel = document.getElementById('survey-panel-direct');
   renderSurvey(panel, SURVEY_QUESTIONS, async (answers) => {
@@ -568,9 +571,9 @@ async function enterMarkerMode() {
 
   // #screen-start의 자식(.start-content)에 걸린 z-index:1이 #screen-start 자체는
   // stacking context를 만들지 않아 body 최상위 레벨로 그대로 노출된다 — 그 결과 DOM 순서만으론
-  // #screen-marker(z-index:auto)가 절대 위로 못 올라온다. 그래서 명시적으로 숨긴다.
-  document.getElementById('screen-start').style.display = 'none';
-  document.getElementById('screen-marker').style.display = 'block';
+  // #screen-marker(z-index:auto)가 절대 위로 못 올라온다. 그래서 router.show로 명시적으로 숨긴다
+  // (data-screen이 "marker"가 되면 #screen-start는 base section 규칙으로 되돌아가 display:none).
+  router.show('marker');
   const hint = document.getElementById('marker-hint');
   const fallbackBtn = document.getElementById('btn-marker-fallback');
   hint.hidden = false;
@@ -585,7 +588,9 @@ async function enterMarkerMode() {
   function fallbackToOverlay() {
     clearTimeout(fallbackTimer);
     markerSession?.stop();
-    document.getElementById('screen-marker').style.display = 'none';
+    // #screen-marker를 별도로 숨기지 않는다 — btn-overlay 클릭이 동기적으로 startOverlayFlow의
+    // flow.start()/syncScreen()까지 실행해(첫 await 이전) data-screen이 곧장 "guide"로 바뀌고,
+    // router CSS 규칙에 따라 #screen-marker는 자동으로 사라진다(중간에 리페인트가 끼어들 여지 없음).
     document.getElementById('btn-overlay').click();
   }
 
@@ -670,9 +675,7 @@ async function enterVisionMode() {
   btnVision.classList.remove('btn-loading');
   labelEl.textContent = labelBeforeLoad;
 
-  document.getElementById('screen-start').style.display = 'none';
-  const screenVision = document.getElementById('screen-vision');
-  screenVision.style.display = 'block';
+  router.show('vision');
   const hint = document.getElementById('vision-hint');
   const errorPanel = document.getElementById('vision-error');
   const backBtn = document.getElementById('btn-vision-back');
@@ -692,7 +695,9 @@ async function enterVisionMode() {
   function exitVisionScreen() {
     visionSession?.stop();
     visionSession = null;
-    screenVision.style.display = 'none';
+    // #screen-vision을 별도로 숨기지 않는다 — 아래 세 호출부 모두 exitVisionScreen() 직후
+    // 동기적으로(첫 await 이전) router.show()를 거치는 다음 화면 전환을 실행해 data-screen이
+    // 곧장 바뀌고, router CSS 규칙에 따라 #screen-vision은 자동으로 사라진다.
   }
 
   backBtn.addEventListener('click', () => {
@@ -908,6 +913,7 @@ btnXR.addEventListener('click', async () => {
     onEnd: () => {
       // 세션 종료(뒤로가기 등) → 기존 자이로 오버레이 씬으로 복귀.
       // XR 씬에 캐릭터가 재소속되며 overlay 씬에서 빠졌을 수 있으니 다시 붙여준다.
+      router.setMode(null); // scenes/webxr.js의 cleanup() 직후 호출되는 시점과 동일한 순서
       hideXRHint();
       activeScene = overlay;
       overlay.resume();
@@ -927,6 +933,7 @@ btnXR.addEventListener('click', async () => {
     return;
   }
 
+  router.setMode('xr'); // scenes/webxr.js가 세션 시작에 성공해 xr을 반환한 시점과 동일한 순서
   overlay.pause();
   activeScene = xr;
   btnXR.hidden = true;

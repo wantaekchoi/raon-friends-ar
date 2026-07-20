@@ -169,7 +169,8 @@ export async function startXR({
     renderer.setAnimationLoop(null);
     renderer.domElement.remove();
     renderer.dispose();
-    document.body.classList.remove('xr-active');
+    // data-mode="xr" 해제는 호출부(main.js)가 onEnd 콜백에서 router.setMode(null)로 처리한다
+    // (화면·모드 전환은 router가 단독 소유 — src/app/router.js).
   }
 
   let session;
@@ -192,7 +193,9 @@ export async function startXR({
     onEnd?.();
   });
 
-  document.body.classList.add('xr-active'); // #camera-video 등 기존 오버레이 캔버스를 숨김
+  // data-mode="xr" 설정(#camera-video 등 기존 오버레이 캔버스 숨김)은 호출부(main.js)가
+  // startXR()이 xr을 반환한 직후 router.setMode('xr')로 처리한다 — 화면·모드 전환은 router가
+  // 단독 소유한다(src/app/router.js).
   document.getElementById('screen-ar').appendChild(renderer.domElement);
 
   renderer.xr.setReferenceSpaceType('local');
