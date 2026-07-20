@@ -157,6 +157,7 @@ document.getElementById('btn-error-restart').textContent = CONFIG.ui.btnErrorRes
 document.getElementById('btn-capture').textContent = CONFIG.ui.btnCapture;
 document.getElementById('btn-restart').textContent = CONFIG.ui.btnRestart;
 document.getElementById('btn-xr').textContent = CONFIG.ui.btnXR;
+document.getElementById('btn-quicklook').textContent = CONFIG.ui.btnQuickLook;
 document.getElementById('btn-next').textContent = CONFIG.ui.btnNext;
 document.querySelectorAll('.google-form-link').forEach((a) => { a.textContent = CONFIG.ui.googleFormLink; });
 
@@ -407,8 +408,31 @@ async function startOverlayFlow() {
   // 기존 자이로 오버레이 흐름과 완전히 동일하게 동작한다.
   if (await isXRSupported()) {
     document.getElementById('btn-xr').hidden = false;
+  } else if (supportsQuickLook()) {
+    // iOS: WebXR 대신 네이티브 AR Quick Look(진짜 6DoF 바닥 고정)으로 대칭을 맞춘다 (Task D)
+    document.getElementById('btn-quicklook').hidden = false;
   }
 }
+
+// iOS Safari의 AR Quick Look 지원 감지 — rel="ar" 앵커를 지원하면 네이티브 ARKit 뷰어 사용 가능
+function supportsQuickLook() {
+  const a = document.createElement('a');
+  return a.relList && a.relList.supports && a.relList.supports('ar');
+}
+
+// 현재 화자의 .usdz를 AR Quick Look으로 연다. rel="ar" 앵커는 <img>가 유일한 자식이어야
+// 내비게이션 대신 Quick Look이 뜨므로, 보이는 버튼과 분리된 임시 앵커를 만들어 클릭한다.
+document.getElementById('btn-quicklook').addEventListener('click', () => {
+  sound.play('tap');
+  const key = currentSpeaker || 'raong';
+  const a = document.createElement('a');
+  a.rel = 'ar';
+  a.href = `${import.meta.env.BASE_URL}usdz/${key}.usdz`;
+  a.appendChild(document.createElement('img'));
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
 
 document.getElementById('btn-overlay').addEventListener('click', startOverlayFlow);
 

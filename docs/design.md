@@ -97,7 +97,7 @@
 |---|---|---|
 | 빌드·개발 | **Vite** + GitHub Actions 배포 | npm으로 three.js/MindAR 버전 고정, dev 서버 HTTPS로 실기기 카메라 테스트 용이 |
 | AR 기본 모드 | **카메라 오버레이** (getUserMedia 배경 + WebGL 오버레이) | 마커 불필요, iOS/Android 전 기기 동작 보장 |
-| AR 마커 모드 | **MindAR** (이미지 트래킹, 무료 오픈소스) | 캐릭터 카드 위에 캐릭터 소환 — 카드가 곧 캐릭터 선택. WebXR 평면인식은 iOS Safari 미지원, 8th Wall은 유료라서 제외 |
+| AR 마커 모드 | **MindAR** (이미지 트래킹, 무료 오픈소스) | 캐릭터 카드 위에 캐릭터 소환 — 카드가 곧 캐릭터 선택. (v1.3.0 하이브리드: 소환 후에도 세션 유지 — 카드 보이면 6DoF 부착, 놓치면 화면 유지·재스냅. iOS는 AR Quick Look usdz로 완전 고정 보완.) WebXR 평면인식은 iOS Safari 미지원, 8th Wall은 유료라서 제외 |
 | 3D 렌더링 | **Three.js** (npm) | glb 로딩·애니메이션 표준, MindAR과 결합 검증됨 |
 | 3D 모델 | **glTF 바이너리(.glb)** | 웹 표준 포맷. 보유 fbx를 Blender에서 변환 (8장) |
 | 캐릭터 모션 | 코드 기반 모션 기본(등장 바운스·대기 숨쉬기·감사 점프) + 클립 있으면 AnimationMixer | 리깅만 있고 애니메이션 클립이 없어도 살아있는 느낌 보장 |

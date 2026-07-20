@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>USDZ 내보내기 (개발 전용)</title>
+</head>
+<body>
+  <!-- 개발 전용 도구 페이지 — vite build 입력(index/dashboard)에 없어 배포에는 포함되지 않는다.
+       scripts/export-usdz.mjs가 헤드리스로 열어 캐릭터 3종을 .usdz로 변환·다운로드한다.
+       (iOS AR Quick Look용 — 부착감 계획 Task D) -->
+  <pre id="log">ready</pre>
+  <script type="module">
+    import * as THREE from 'three';
+    import { USDZExporter } from 'three/examples/jsm/exporters/USDZExporter.js';
+    import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+    import { loadCharacter } from '/src/characters.js';
+
+    const log = (m) => { document.getElementById('log').textContent += `\n${m}`; };
+
+    // 앱과 동일한 로더(머티리얼 3규칙 포함)를 재사용하되, USDZExporter는 MeshStandardMaterial만
+    // 내보내므로 툰 머티리얼을 색·텍스처만 승계한 스탠더드로 변환한다.
+    // USDZExporter의 imageToCanvas는 img/canvas/ImageBitmap만 그릴 수 있다 — fbx의 깨진
+    // 임베디드 맵이나 DataTexture(툰 gradient 등)가 섞이면 "No valid image data" 오류가 나므로
+    // 그릴 수 있는 이미지가 달린 맵만 승계한다.
+    function drawableMap(m) {
+      const img = m.map?.image;
+      if (!img || !(img.width > 0)) return null;
+      const ok = (typeof HTMLImageElement !== 'undefined' && img instanceof HTMLImageElement)
+        || (typeof HTMLCanvasElement !== 'undefined' && img instanceof HTMLCanvasElement)
+        || (typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap)
+        || (typeof OffscreenCanvas !== 'undefined' && img instanceof OffscreenCanvas);
+      return ok ? m.map : null;
+    }
+
+    const conv = (m) => new THREE.MeshStandardMaterial({
+      color: m.color ? m.color.clone() : new THREE.Color(0xffffff),
+      map: drawableMap(m),
+      roughness: 0.9,
+      metalness: 0,
+    });
+
+    // 지오메트리를 그룹(머티리얼 인덱스) 단위로 잘라낸다 — USDZExporter는 머티리얼 배열이 달린
+    // 메시를 통째로 스킵하기 때문에(배열엔 isMeshStandardMaterial이 없음) 단일 머티리얼 메시로
+    // 분할해야 전체가 내보내진다. FBXLoader 지오메트리는 대부분 비인덱스드라 속성 자체를 슬라이스.
+    function sliceGeometry(src, start, count) {
+      const geom = new THREE.BufferGeometry();
+      if (src.index) {
+        for (const [name, attr] of Object.entries(src.attributes)) geom.setAttribute(name, attr);
+        geom.setIndex(new THREE.BufferAttribute(src.index.array.slice(start, start + count), 1));
+      } else {
+        for (const [name, attr] of Object.entries(src.attributes)) {
+          const arr = attr.array.slice(start * attr.itemSize, (start + count) * attr.itemSize);
+          geom.setAttribute(name, new THREE.BufferAttribute(arr, attr.itemSize, attr.normalized));
+        }
+      }
+      return geom;
+    }
+
+    // usda는 정점 데이터를 텍스트로 저장해 비인덱스드(면마다 정점 3개 중복) 그대로면 수십 MB로
+    // 부푼다 — 정적 내보내기에 불필요한 스킨/정점색 속성을 떼고 mergeVertices로 용접(인덱스드화)해
+    // 고유 정점만 남긴다.
+    function compactGeometry(src) {
+      const geom = src.clone();
+      for (const name of ['skinIndex', 'skinWeight', 'color']) geom.deleteAttribute(name);
+      return mergeVertices(geom, 1e-4);
+    }
+
+    // 캐릭터 전체를 "월드 변환이 구워진 단일 머티리얼 정적 메시들"로 재구성한 씬을 만든다.
+    // SkinnedMesh도 isMesh라 함께 순회되며, 지오메트리는 바인드 포즈 그대로 정적 내보내기된다.
+    function buildExportScene(char) {
+      const scene = new THREE.Scene();
+      char.updateWorldMatrix(true, true);
+      char.traverse((o) => {
+        if (!o.isMesh) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        const groups = Array.isArray(o.material) && o.geometry.groups?.length ? o.geometry.groups : null;
+        if (groups) {
+          for (const g of groups) {
+            const mesh = new THREE.Mesh(
+              compactGeometry(sliceGeometry(o.geometry, g.start, g.count)),
+              conv(mats[g.materialIndex] ?? mats[0]),
+            );
+            mesh.applyMatrix4(o.matrixWorld);
+            scene.add(mesh);
+          }
+        } else {
+          const mesh = new THREE.Mesh(compactGeometry(o.geometry), conv(mats[0]));
+          mesh.applyMatrix4(o.matrixWorld);
+          scene.add(mesh);
+        }
+      });
+      return scene;
+    }
+
+    window.exportUsdz = async (key) => {
+      log(`load ${key}`);
+      const char = await loadCharacter(key);
+      if (!char) throw new Error(`loadCharacter(${key}) 실패`);
+      const scene = buildExportScene(char); // 캐릭터는 1.2유닛(=1.2m) 정규화 — USDZ 단위는 미터라 실물 크기
+      const exporter = new USDZExporter();
+      const bytes = await exporter.parseAsync(scene, { maxTextureSize: 512 });
+      log(`export ${key}: ${bytes.byteLength} bytes`);
+      // 다운로드 대신 base64 반환 — Chrome이 제스처 없는 연속 다운로드를 차단하기 때문.
+      // 수백 KB 수준이라 evaluate 왕복으로 충분하다.
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      }
+      return btoa(bin);
+    };
+    log('exportUsdz ready');
+  </script>
+</body>
+</html>

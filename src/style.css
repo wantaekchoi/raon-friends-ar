@@ -361,7 +361,9 @@ body.marker-flow #btn-home { display: none; }
 }
 #btn-vision-fallback-survey { background: rgba(255, 255, 255, 0.16); color: #fff; }
 
-/* --- WebXR hit-test 바닥인식 모드 (Android, 베타) --- */
+/* --- WebXR hit-test 바닥인식 모드 (Android, 베타) ---
+   #btn-quicklook(iOS AR Quick Look)은 같은 자리를 쓴다 — 두 버튼은 플랫폼별로 상호 배타 노출. */
+#btn-quicklook,
 #btn-xr {
   position: absolute; right: max(14px, env(safe-area-inset-right));
   bottom: max(24px, env(safe-area-inset-bottom)); z-index: 2;
