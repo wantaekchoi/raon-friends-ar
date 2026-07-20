@@ -43,6 +43,9 @@ export async function initMarker({ containerEl, onTarget }) {
     uiLoading: 'no',
     uiScanning: 'no',
     uiError: 'no',
+    // 트래킹 지터 완화 — 기본값보다 강한 스무딩 (카드 위 미세 떨림 감소, 실기기 피드백 2026-07-20)
+    filterMinCF: 0.0001,
+    filterBeta: 0.001,
   });
   const { renderer, scene, camera } = mindarThree;
 
@@ -51,23 +54,41 @@ export async function initMarker({ containerEl, onTarget }) {
   sun.position.set(1, 3, 2);
   scene.add(sun);
 
+  // 카드가 "세워져" 있으면(모니터에 띄우기 등) 카드 위쪽(Y)으로, "눕혀져" 있으면(바닥·테이블)
+  // 카드 면에서 수직(Z)으로 일어서도록 자동 전환한다 — 바닥 카드에서 캐릭터가 누워 보이는
+  // 문제(실기기 피드백 2026-07-20) 해결. 두 자세 사이는 slerp로 부드럽게 전환.
+  const QUAT_UPRIGHT = new THREE.Quaternion(); // 카드 Y = 캐릭터 위 (세워진 카드)
+  const QUAT_STANDING = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0)); // 카드 법선 = 캐릭터 위 (눕힌 카드)
+
   const entries = [];
   for (const [key, targetIndex] of Object.entries(TARGET_INDEX)) {
     const anchor = mindarThree.addAnchor(targetIndex);
     const loader = CHARACTER_LOADERS[key];
     let character = loader ? await loader() : null;
     if (!character) character = createPlaceholderCharacter(PLACEHOLDER_COLORS[key] ?? 0xffffff);
-    anchor.group.add(character);
+    const standGroup = new THREE.Group(); // 기립 방향 전용 래퍼 — 숨쉬기 모션(character 로컬)과 분리
+    standGroup.add(character);
+    anchor.group.add(standGroup);
     anchor.onTargetFound = () => onTarget?.(key);
-    entries.push({ key, character });
+    entries.push({ key, character, standGroup, anchor });
   }
 
   await mindarThree.start();
 
   const clock = new THREE.Clock();
+  const worldQuat = new THREE.Quaternion();
+  const cardUp = new THREE.Vector3();
   renderer.setAnimationLoop(() => {
     const t = clock.getElapsedTime();
-    for (const { character } of entries) {
+    for (const { character, standGroup, anchor } of entries) {
+      if (anchor.group.visible) {
+        // 카드의 Y축(카드 위쪽)이 카메라 상향과 얼마나 정렬돼 있나 — 정렬(≈1)이면 세워진 카드,
+        // 수직(≈0)이면 눕힌 카드. 0.55를 경계로 목표 자세를 정하고 부드럽게 수렴시킨다.
+        anchor.group.getWorldQuaternion(worldQuat);
+        cardUp.set(0, 1, 0).applyQuaternion(worldQuat);
+        const uprightness = cardUp.y; // MindAR world = 카메라 공간 (카메라 up = +Y)
+        standGroup.quaternion.slerp(uprightness > 0.55 ? QUAT_UPRIGHT : QUAT_STANDING, 0.12);
+      }
       character.position.y = Math.sin(t * 2.2) * 0.02; // 카드 위에서 살짝 숨쉬듯 대기 모션
       character.rotation.y = Math.sin(t * 0.9) * 0.18;
     }
