@@ -340,13 +340,6 @@ async function submitAndRetry(answers, { onMessage, retryParent, onFail }) {
 // (스트림·렌더러·리스너가 두 세트 생겨 리소스 누수)
 let overlayEntering = false;
 
-// 소환/URL(?char=) 공통 — 안내 전체를 한 캐릭터로 고정한다 (가이드 시작 전에 호출).
-// flow는 guideScript 항목 객체를 그대로 참조하므로 speaker를 제자리에서 바꾸면 즉시 반영된다.
-function lockGuideToCharacter(key) {
-  if (!CONFIG.characters[key]) return;
-  guideScript.forEach((line) => { line.speaker = key; });
-}
-
 // 오버레이 진입 공통 흐름 — 시작 버튼과 카드 소환 전환이 함께 사용한다.
 async function startOverlayFlow() {
   if (overlayEntering) return;
@@ -529,7 +522,7 @@ async function enterMarkerMode() {
         setTimeout(() => {
           markerSession?.stop();
           document.getElementById('screen-marker').style.display = 'none';
-          lockGuideToCharacter(key);
+          flow = createFlow(lockGuideScriptToCharacter(CONFIG.guideScript, key, CONFIG.characters));
           startOverlayFlow();
         }, 1600);
       },
