@@ -114,6 +114,13 @@ export async function initOverlay({
   characterHeight = 1.2,
   cameraFacing = 'environment',
   gyroAllowed: gyroAllowedOpt,
+  // 자이로 구독원 — 기본값은 실기기 window 이벤트. 헤드리스 E2E(S7)가 가짜 방향 이벤트를 주입할
+  // 수 있도록 main.js/entry.js가 대체 provider(cb 노출형)를 넘길 수 있다(Task 11). 미지정 시
+  // 동작은 기존과 완전히 동일하다.
+  orientationProvider,
+  // true면 camera.quaternion 참조를 window.__overlayCameraQuat로 노출한다 — 헤드리스 E2E 전용
+  // 디버그 훅(Task 11 S7). 기본 false: 프로덕션 경로에는 아무 영향 없다.
+  exposeCameraQuat = false,
 }) {
   // iOS 자이로 권한은 사용자 제스처 안에서만 요청 가능 — 소환/인식 등 비제스처 경로로 진입할 땐
   // main.js가 첫 탭 순간에 미리 받아둔 결과(gyroAllowedOpt)를 넘겨준다. 없으면 여기서 직접 요청.
@@ -136,6 +143,12 @@ export async function initOverlay({
   camera.position.set(0, 1.4, 0);
   camera.lookAt(charPos.x, lookAtY, charPos.z);
 
+  // 헤드리스 E2E 전용 디버그 훅(Task 11 S7) — fakeGyro 모드에서만 main.js/entry.js가 true로
+  // 넘긴다. 실제 값이 아닌 Quaternion 참조를 노출해 이후 회전이 반영되는 대로 최신값을 읽는다.
+  if (exposeCameraQuat) {
+    window.__overlayCameraQuat = camera.quaternion;
+  }
+
   // 자이로 시점: 기기 방향에 카메라를 고정해 캐릭터가 실제 공간에 붙어있는 느낌 (포켓몬GO식)
   if (gyroAllowed) {
     const zee = new THREE.Vector3(0, 0, 1);
@@ -144,7 +157,7 @@ export async function initOverlay({
     const qWorld = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
     let alphaOffset = null; // 첫 측정 방위를 "정면"으로 삼아 캐릭터가 항상 눈앞에서 시작
 
-    window.addEventListener('deviceorientation', (e) => {
+    function handleOrientation(e) {
       if (e.alpha === null || e.beta === null || e.gamma === null) return;
       const alpha = THREE.MathUtils.degToRad(e.alpha);
       if (alphaOffset === null) alphaOffset = alpha;
@@ -157,7 +170,9 @@ export async function initOverlay({
       camera.quaternion.setFromEuler(euler);
       camera.quaternion.multiply(qWorld);
       camera.quaternion.multiply(qScreen.setFromAxisAngle(zee, -orient));
-    });
+    }
+
+    (orientationProvider ?? ((cb) => window.addEventListener('deviceorientation', cb)))(handleOrientation);
   }
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.2));

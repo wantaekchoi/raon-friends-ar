@@ -65,14 +65,24 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
       document.getElementById('btn-home').hidden = false;
       guide.begin();
       const gyroOk = await ensureGyroPermission();
+      // 테스트 전용 파라미터(S7 헤드리스 자이로 검증) — README·운영자 시트에는 절대 노출하지 않는다.
+      // 실기기 권한 여부와 무관하게 자이로 회전 경로 자체(orientationProvider → camera.quaternion)를
+      // 결정적으로 태우기 위해 gyroAllowed를 강제 true로 둔다.
+      const fakeGyro = store.params.get('fakeGyro') === '1';
       overlay = await initOverlay({
         videoEl: document.getElementById('camera-video'),
         canvasEl: document.getElementById('three-canvas'),
-        gyroAllowed: gyroOk,
+        gyroAllowed: fakeGyro ? true : gyroOk,
         // E2 매직미러: size/camera 파라미터가 있을 때만 옵션을 전달한다 — overlay.js가 아직
         // 해당 옵션을 지원하지 않는 상태에서도(A팩 작업 중) 여분의 키는 무시되어 안전하다.
         ...(store.get('characterHeight') !== undefined && { characterHeight: store.get('characterHeight') }),
         ...(store.get('cameraFacing') !== undefined && { cameraFacing: store.get('cameraFacing') }),
+        ...(fakeGyro && {
+          // 헤드리스 E2E가 window.__fakeOrientation(payload)로 가짜 방향 이벤트를 주입할 수 있게
+          // window에 콜백을 노출하는 provider로 대체(overlay.js 기본값은 window 이벤트 구독).
+          orientationProvider: (cb) => { window.__fakeOrientation = cb; },
+          exposeCameraQuat: true,
+        }),
       });
       guide.setScene(asScene(overlay));
       {
