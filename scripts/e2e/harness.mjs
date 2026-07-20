@@ -28,6 +28,10 @@ export async function startApp() {
       '--no-sandbox',
       '--use-fake-device-for-media-stream', // 가짜 카메라 프레임 공급
       '--use-fake-ui-for-media-stream',     // getUserMedia 권한 자동 허용
+      // CI(리눅스) Chrome은 기본 locale이 en이라 navigator.language 기반 언어 판별이 흔들린다 —
+      // "파라미터 없으면 한국어" 전제를 어느 환경에서든 고정한다.
+      '--lang=ko-KR',
+      '--accept-lang=ko-KR,ko',
     ],
   });
 }

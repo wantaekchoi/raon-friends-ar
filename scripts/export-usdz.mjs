@@ -5,29 +5,17 @@
 // 다운로드된 파일을 public/usdz/로 옮긴다.
 //
 // 사용법: node scripts/export-usdz.mjs
-//   - puppeteer-core가 리포 의존성이 아니므로 PUPPETEER_DIR 환경변수로 설치 위치를 알려준다.
-//     예) PUPPETEER_DIR=/path/to/dir-with-node_modules node scripts/export-usdz.mjs
+//   - puppeteer-core는 리포 devDependency다(scripts/e2e/harness.mjs와 동일하게 npm install로 확보).
 //   - Chrome 경로는 CHROME_BIN으로 재정의 가능 (기본: macOS 표준 설치 경로)
-import { createRequire } from 'module';
 import { spawn } from 'child_process';
 import { mkdirSync, writeFileSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
+import puppeteer from 'puppeteer-core';
 
 const ROOT = resolve(new URL('..', import.meta.url).pathname);
 const OUT_DIR = join(ROOT, 'public', 'usdz');
 const KEYS = ['raong', 'raoni', 'raona'];
 const CHROME = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-
-const requireFrom = createRequire(
-  process.env.PUPPETEER_DIR ? join(process.env.PUPPETEER_DIR, 'noop.js') : import.meta.url,
-);
-let puppeteer;
-try {
-  puppeteer = requireFrom('puppeteer-core');
-} catch {
-  console.error('puppeteer-core를 찾지 못함 — PUPPETEER_DIR=<node_modules가 있는 디렉토리>로 지정하세요.');
-  process.exit(1);
-}
 
 const dev = spawn('npm', ['run', 'dev'], { cwd: ROOT, stdio: 'ignore', detached: true });
 const BASE_URL = 'http://localhost:5173/raon-friends-ar/';

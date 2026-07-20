@@ -10,6 +10,7 @@ const scenarioModules = [
   './e2e/scenarios/s3-vision-mock.mjs',
   './e2e/scenarios/s4-marker-fallback.mjs',
   './e2e/scenarios/s5-survey-submit.mjs',
+  './e2e/scenarios/s6-params.mjs',
 ];
 
 execSync('npm run build', { stdio: 'inherit' });

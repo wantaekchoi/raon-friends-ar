@@ -29,6 +29,8 @@ jobs:
       - run: npm ci
       - run: npm test --if-present
       - run: npm run build
+      - name: E2E
+        run: CHROME_BIN=$(which google-chrome) npm run e2e
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
