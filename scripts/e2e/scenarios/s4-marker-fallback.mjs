@@ -1,0 +1,21 @@
+// S4: 카드 모드 — fake 카메라로는 인식 불가 → 30초(×0.1배속=3초) 폴백 버튼 노출 → 오버레이 폴백까지.
+import { withPage, dismissOnboarding, readBubble } from '../harness.mjs';
+
+export const name = 'S4 카드 미인식 폴백';
+
+export async function run() {
+  await withPage(async (page) => {
+    await dismissOnboarding(page);
+    // #btn-marker는 targets/cards.mind HEAD 체크(비동기)가 끝나야 disabled가 풀린다 —
+    // networkidle0로 goto가 끝난 뒤라 보통 이미 풀려 있지만, 방어적으로 대기한다.
+    await page.waitForFunction(() => {
+      const btn = document.getElementById('btn-marker');
+      return btn && !btn.disabled;
+    }, { timeout: 10000 });
+    await page.click('#btn-marker');
+    await page.waitForSelector('#btn-marker-fallback:not([hidden])', { timeout: 15000 }); // 30s × 0.1 = 3s + 여유
+    await page.click('#btn-marker-fallback');
+    const b = await readBubble(page);
+    if (b.screen !== 'guide') throw new Error(`폴백 후 가이드 아님: ${b.screen}`);
+  }, { params: '?timerScale=0.1' });
+}

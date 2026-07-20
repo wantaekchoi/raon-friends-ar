@@ -10,6 +10,7 @@ import { enqueue, flush, pendingCount } from './queue.js';
 import { initSound } from './sound.js';
 import { captureMoment } from './capture.js';
 import { buildSoloGuideScript } from './solo-character.js';
+import { scaledMs } from './app/timing.js';
 
 // F1 다국어 — html lang·문서 제목을 현재 언어에 맞춘다 (CONFIG.lang은 config.js가 모듈 로드
 // 시점에 currentLang()으로 이미 판별해 둔 값).
@@ -578,7 +579,7 @@ async function enterMarkerMode() {
 
   const fallbackTimer = setTimeout(() => {
     if (!found) fallbackBtn.hidden = false;
-  }, 30000);
+  }, scaledMs(30000));
 
   function fallbackToOverlay() {
     clearTimeout(fallbackTimer);
@@ -855,7 +856,7 @@ let kioskTimer = null;
 function resetKioskTimer() {
   if (!KIOSK_MODE || !kioskArmed) return;
   clearTimeout(kioskTimer);
-  kioskTimer = setTimeout(() => location.reload(), (CONFIG.kiosk.idleResetSec ?? 30) * 1000);
+  kioskTimer = setTimeout(() => location.reload(), scaledMs((CONFIG.kiosk.idleResetSec ?? 30) * 1000));
 }
 
 function armKioskReset() {
