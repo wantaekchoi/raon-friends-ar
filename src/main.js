@@ -135,6 +135,12 @@ document.getElementById('start-scarcity').textContent = CONFIG.scarcityText;
 document.getElementById('btn-overlay-label').textContent = CONFIG.ui.btnOverlay;
 document.getElementById('btn-marker-label').textContent = CONFIG.ui.btnMarker;
 document.getElementById('btn-marker-badge').textContent = CONFIG.ui.btnMarkerBadgeSoon;
+document.getElementById('btn-vision-label').textContent = CONFIG.ui.btnVision;
+document.getElementById('btn-vision-badge').textContent = CONFIG.ui.btnVisionBadge;
+document.getElementById('vision-hint').textContent = CONFIG.ui.visionHint;
+document.getElementById('vision-error-message').textContent = CONFIG.ui.visionErrorMessage;
+document.getElementById('btn-vision-fallback-overlay').textContent = CONFIG.ui.btnVisionFallbackOverlay;
+document.getElementById('btn-vision-fallback-survey').textContent = CONFIG.ui.btnVisionFallbackSurvey;
 document.getElementById('hint-text').textContent = CONFIG.ui.hint;
 document.getElementById('brand-line').textContent = CONFIG.ui.brandLine;
 document.getElementById('marker-hint').textContent = CONFIG.ui.markerHint;
@@ -492,6 +498,96 @@ async function enterMarkerMode() {
     console.warn('마커 모드 초기화 실패 — 오버레이로 폴백', err);
     fallbackToOverlay();
   }
+}
+
+// ===========================================================================
+// Vision AI 인식 모드 — 카메라로 캐릭터(카드·그림)를 알아보고 안내를 시작한다.
+// scenes/vision.js는 렌더링을 직접 하지 않고 "인식"만 담당한다 — 확정되면 자신의 카메라·
+// classifier를 정리한 뒤 onRecognized(key)만 알려주고, 실제 AR 안내는 검증된 오버레이 모드
+// (btn-overlay 클릭 핸들러)로 그대로 이어받는다. 그래서 여기서는 마커 모드처럼 activeScene에
+// 연결하지 않는다 — 화면 전환 이후엔 overlay가 activeScene을 스스로 채운다.
+// 1단계 기준: 인식된 라벨↔캐릭터 고정 연결은 3단계에서 추가한다(현재는 표준 오버레이 흐름 진입).
+// ===========================================================================
+let visionSession = null;
+
+document.getElementById('btn-vision').addEventListener('click', enterVisionMode);
+
+// 중복 탭 시 getUserMedia 스트림이 두 개 떠서 카메라를 경쟁하는 것 방지 (마커 모드와 동일한 가드)
+let visionEntering = false;
+
+async function enterVisionMode() {
+  if (visionEntering) return;
+  visionEntering = true;
+
+  const btnVision = document.getElementById('btn-vision');
+  const labelEl = document.getElementById('btn-vision-label');
+  const labelBeforeLoad = labelEl.textContent;
+  btnVision.disabled = true;
+  btnVision.classList.add('btn-loading');
+  labelEl.textContent = CONFIG.ui.visionLoadingLabel;
+
+  let initVision;
+  try {
+    ({ initVision } = await import('./scenes/vision.js'));
+  } catch (err) {
+    console.warn('비전 모듈 로드 실패 — 시작 화면으로 복귀', err);
+    labelEl.textContent = labelBeforeLoad;
+    btnVision.classList.remove('btn-loading');
+    btnVision.disabled = false;
+    visionEntering = false;
+    return;
+  }
+  btnVision.classList.remove('btn-loading');
+  labelEl.textContent = labelBeforeLoad;
+
+  document.getElementById('screen-start').style.display = 'none';
+  const screenVision = document.getElementById('screen-vision');
+  screenVision.style.display = 'block';
+  const hint = document.getElementById('vision-hint');
+  const errorPanel = document.getElementById('vision-error');
+  hint.hidden = false;
+  errorPanel.hidden = true;
+
+  function showVisionError() {
+    hint.hidden = true;
+    errorPanel.hidden = false;
+  }
+
+  function exitVisionScreen() {
+    visionSession?.stop();
+    visionSession = null;
+    screenVision.style.display = 'none';
+  }
+
+  document.getElementById('btn-vision-fallback-overlay').addEventListener('click', () => {
+    exitVisionScreen();
+    document.getElementById('btn-overlay').click();
+  }, { once: true });
+  document.getElementById('btn-vision-fallback-survey').addEventListener('click', () => {
+    exitVisionScreen();
+    startDirectSurvey();
+  }, { once: true });
+
+  try {
+    visionSession = await initVision({
+      containerEl: document.getElementById('vision-container'),
+      onRecognized() {
+        // 1단계: 인식된 캐릭터 key는 아직 흐름에 반영하지 않는다(3단계에서 speaker 고정 예정) —
+        // 지금은 "인식→안내 진입" 화면 흐름 자체가 mock으로 검증 가능함을 보장하는 것이 목표.
+        exitVisionScreen();
+        document.getElementById('btn-overlay').click();
+      },
+      onError(err) {
+        console.warn('비전 인식 실패 — 폴백 안내 노출', err);
+        showVisionError();
+      },
+    });
+  } catch (err) {
+    console.warn('비전 모드 초기화 실패 — 폴백 안내 노출', err);
+    showVisionError();
+  }
+
+  visionEntering = false;
 }
 
 function renderGuide() {

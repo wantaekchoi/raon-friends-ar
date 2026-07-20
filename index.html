@@ -38,6 +38,9 @@
           <button id="btn-marker" disabled>
             <span id="btn-marker-label"></span> <span class="badge-soon" id="btn-marker-badge"></span>
           </button>
+          <button id="btn-vision">
+            <span class="btn-emoji" aria-hidden="true">🔍</span><span id="btn-vision-label"></span> <span class="badge-soon" id="btn-vision-badge"></span>
+          </button>
         </div>
         <p id="hint-text" class="hint"></p>
         <div id="size-chips" role="radiogroup"></div>
@@ -61,6 +64,18 @@
       <div id="marker-container"></div>
       <div id="marker-hint" role="status" aria-live="polite"></div>
       <button id="btn-marker-fallback" hidden></button>
+    </section>
+
+    <section id="screen-vision">
+      <div id="vision-container"></div>
+      <div id="vision-hint" role="status" aria-live="polite"></div>
+      <div id="vision-error" hidden role="alert">
+        <p id="vision-error-message"></p>
+        <div class="vision-error-actions">
+          <button id="btn-vision-fallback-overlay" type="button"></button>
+          <button id="btn-vision-fallback-survey" type="button"></button>
+        </div>
+      </div>
     </section>
 
     <section id="screen-survey-direct">
