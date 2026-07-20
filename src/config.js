@@ -33,6 +33,15 @@ export const CONFIG = {
   },
   // main.js/survey.js가 참조하는 UI 문자열 사전 (F1) — 버튼·안내·에러·재시도 문구 전부 포함
   ui: S.ui,
+  // Vision AI 인식 모드 (1단계: 구조만, mock classifier / 2단계: MediaPipe 실 모델로 교체 예정)
+  vision: {
+    // BASE_URL 기준 상대경로 — characters.js의 `${BASE}models/...` 패턴과 동일하게 로드부에서 조합한다.
+    modelPath: 'models/vision/raon-mascot-classifier.tflite',
+    labels: ['raong', 'raoni', 'raona', 'unknown'],
+    confidenceThreshold: 0.7, // 이 미만 신뢰도는 인식 실패로 취급 (recognition-gate.js)
+    requiredConsecutive: 5, // 동일 라벨이 이 횟수만큼 연속 인식돼야 확정
+    classifyIntervalMs: 400, // 매 프레임 추론하지 않고 이 간격(ms)으로 제한 (저사양 기기 대비)
+  },
 };
 
 export const SURVEY_QUESTIONS = S.survey.questions;

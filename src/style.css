@@ -112,7 +112,7 @@ body[data-screen="done"] #screen-ar { display: block; }
 
 .start-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 4px; }
 
-#btn-overlay, #btn-marker {
+#btn-overlay, #btn-marker, #btn-vision {
   border: none; border-radius: 999px; font-size: 1rem; font-family: inherit;
   display: inline-flex; align-items: center; gap: 8px;
 }
@@ -149,6 +149,17 @@ body[data-screen="done"] #screen-ar { display: block; }
   font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;
   background: #ffe3c7; color: #7a3a0c; white-space: nowrap;
 }
+
+/* Vision AI 인식 버튼 — 마커(비활성 회색)와 달리 mock으로도 바로 동작하므로 눌러볼 수 있는
+   느낌의 색(연블루)으로 구분한다. 배지는 기존 .badge-soon을 그대로 재사용해 시각 언어를 통일. */
+#btn-vision {
+  padding: 13px 26px; font-size: 0.92rem; font-weight: 600;
+  background: #e7f0ff; color: #2d4373; cursor: pointer;
+  transition: transform 0.15s ease;
+}
+#btn-vision:active { transform: scale(0.97); }
+#btn-vision.btn-loading, #btn-vision:disabled { cursor: wait; opacity: 0.85; }
+#btn-vision.btn-loading .badge-soon { display: none; }
 
 /* F2 접근성: 원래 #a0764f는 배경 그라데이션에서 4.5:1 미달 — #7a3a0c로 보정 */
 .hint { font-size: 0.8rem; color: #7a3a0c; margin-top: 2px; }
@@ -296,6 +307,51 @@ body.no-camera #screen-ar { background: linear-gradient(180deg, #2b1a3a, #6b3f8f
   padding: 12px 22px; border: none; border-radius: 999px;
   background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.85rem; font-weight: 600;
 }
+
+/* --- Vision AI 인식 모드 (1단계: 구조 + mock, 2단계에서 MediaPipe 실 모델로 교체 예정) ---
+   #screen-marker와 동일한 패턴: data-screen 상태머신과 무관하게 main.js가 style.display를
+   직접 토글한다. 인식 성공 시엔 이 화면을 숨기고 오버레이 모드로 넘어가므로(marker와 달리
+   배경으로 계속 보이지 않음), z-index/겹침 걱정 없이 단순하게 유지한다. */
+#screen-vision { position: fixed; inset: 0; background: #111; display: none; }
+#vision-container { position: absolute; inset: 0; }
+.vision-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#vision-hint {
+  /* F2 접근성: #marker-hint와 동일한 배색(흰 배경에 #a83c08, 4.5:1 이상) 재사용.
+     좌측은 #btn-vision-back(40px 원형 버튼)과 겹치지 않도록 여백을 더 둔다. */
+  position: absolute; top: max(24px, env(safe-area-inset-top));
+  left: calc(64px + env(safe-area-inset-left)); right: 16px;
+  z-index: 2; text-align: center;
+  background: rgba(255, 255, 255, 0.92); border-radius: 20px; padding: 14px 18px;
+  font-weight: 700; color: #a83c08; box-shadow: 0 10px 28px rgba(232, 89, 12, 0.18);
+}
+/* 4단계: 모델 로딩 중에도(에러가 나기 전에도) 언제든 빠져나갈 수 있는 뒤로가기 —
+   marker-fallback과 달리 타임아웃 없이 스캔 시작과 동시에 항상 노출한다. */
+#btn-vision-back {
+  position: absolute; left: max(14px, env(safe-area-inset-left));
+  top: max(14px, env(safe-area-inset-top)); z-index: 2;
+  width: 40px; height: 40px; border: none; border-radius: 50%;
+  background: rgba(30, 20, 10, 0.55); color: #fff;
+  font-size: 1.1rem; line-height: 1; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+/* 주의: display를 #vision-error에 무조건 선언하면 ID 선택자가 UA의 [hidden]{display:none}보다
+   우선해 hidden 속성이 무력화된다(.google-form-link 주석과 동일한 함정) — :not([hidden])로 범위를
+   좁혀 hidden일 땐 이 규칙이 아예 매치되지 않게 한다. */
+#vision-error {
+  position: absolute; inset: 0; z-index: 3;
+  align-items: center; justify-content: center; gap: 16px; padding: 24px;
+  background: rgba(17, 17, 17, 0.88); text-align: center;
+}
+#vision-error:not([hidden]) { display: flex; flex-direction: column; }
+#vision-error-message { color: #fff; font-weight: 700; font-size: 1rem; max-width: 320px; }
+.vision-error-actions { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 280px; }
+.vision-error-actions button {
+  padding: 12px 22px; border: none; border-radius: 999px;
+  background: #ff7a1a; color: #fff; font-size: 0.92rem; font-weight: 700; font-family: inherit;
+}
+#btn-vision-fallback-survey { background: rgba(255, 255, 255, 0.16); color: #fff; }
 
 /* --- WebXR hit-test 바닥인식 모드 (Android, 베타) --- */
 #btn-xr {

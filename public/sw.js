@@ -43,6 +43,14 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Vision AI 분류 모델(tflite)은 PRECACHE_URLS에 일부러 넣지 않는다 — 용량이 크고(수 MB), 아래
+// SWR 전략을 그대로 적용하면 "모델 파일만 교체한 배포"가 재방문 시 1회는 구버전으로 응답된다.
+// 라벨 체계·정확도가 바뀐 모델이 잠깐이라도 구버전으로 나가는 건 텍스처 SWR 지연보다 리스크가
+// 커서, 이 경로만 네트워크 우선(성공하면 캐시 갱신, 실패해야만 캐시 폴백)으로 처리한다.
+function isVisionModelRequest(url) {
+  return url.pathname.includes('/models/vision/');
+}
+
 // stale-while-revalidate — 캐시가 있으면 즉시 응답해 오프라인·속도를 확보하되, 백그라운드에서
 // 네트워크로 최신본을 받아 캐시를 갱신한다. 순수 cache-first는 "자산 파일만 바꾼 배포"가
 // 재방문 브라우저에 영원히 반영되지 않는 함정이 있었다(적대 리뷰 HIGH 1).
@@ -51,7 +59,25 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   if (request.mode === 'navigate') return;
-  if (new URL(request.url).origin !== self.location.origin) return; // 외부(구글 폼 등)는 관여 안 함
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return; // 외부(구글 폼, MediaPipe CDN 등)는 관여 안 함
+
+  if (isVisionModelRequest(url)) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        try {
+          const res = await fetch(request);
+          if (res && res.ok) cache.put(request, res.clone());
+          return res;
+        } catch {
+          const cached = await cache.match(request);
+          if (cached) return cached; // 오프라인일 때만 이전에 받아둔 모델로 폴백
+          throw new Error('vision model fetch failed and no cache available');
+        }
+      }),
+    );
+    return;
+  }
 
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
