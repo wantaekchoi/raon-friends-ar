@@ -92,3 +92,11 @@ export async function readBubble(page, { settleMs = 2500 } = {}) {
     screen: document.body.dataset.screen,
   }));
 }
+
+// three.js 중복 인스턴스 회귀 검사 — vite의 resolve.dedupe가 깨지거나 청크가 자체 three 사본을
+// 들고 오면 이 console.warn이 뜬다. 검사하려는 청크가 실제로 로드된 시나리오에서만 의미가 있다
+// (mind-ar는 마커 진입에서만 로드되므로 S4가 그 담당).
+export function assertNoThreeDuplicate(ctx) {
+  const dup = ctx.warnings.find((w) => w.includes('Multiple instances of Three.js'));
+  if (dup) throw new Error(`three.js 중복 인스턴스 경고 발견: ${dup}`);
+}
