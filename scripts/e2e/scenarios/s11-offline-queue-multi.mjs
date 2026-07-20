@@ -6,13 +6,10 @@
 // 로드되는 시점에 큐가 실제로 비워지는지가 관건이다. 이 시나리오는 그 다건 누적·리로드 경계를
 // 지나는 경로를 검증한다.
 //
-// 코드 확인 결과(main.js:127, queue.js): 자동 플러시 트리거는 "앱 부팅 시점(모듈 최상단
-// flush() 1회 호출)" 하나뿐이다 — `online` 이벤트 리스너나 주기적 재시도는 없다. 즉 네트워크가
-// 복구돼도 페이지를 다시 로드(reload)하기 전까지는 큐가 자동으로 비워지지 않는다. 이는 버그가
-// 아니라 "리로드 = 다음 방문객"이라는 기존 설계(D2, 키오스크 리셋과 자연히 맞물림)의 특성이므로
-// 이 시나리오는 고치지 않고 "리로드 후에는 정상적으로 비워진다"는 것만 확정 검증한다(네트워크
-// 복구 후 리로드 없이 자동으로 비워지는지는 별도로 확인하지 않는다 — 그런 트리거가 없다는 것을
-// 이미 코드로 확인했으므로 존재하지 않는 동작을 시나리오로 강제하지 않는다).
+// 이 시나리오를 만들면서 자동 플러시 트리거가 "앱 부팅 시 1회"뿐이라는 게 드러났다 — 부스
+// 태블릿처럼 리로드 없이 오래 켜두는 기기에서는 네트워크가 복구돼도 다음 리로드까지 수집이
+// 밀린다(유실은 아니고 지연). 그래서 main.js에 online 이벤트 flush를 추가했고, 이 시나리오가
+// "리로드 없이 네트워크 복구만으로 비워지는지"까지 검증한다.
 import { withPage, dismissOnboarding, readBubble } from '../harness.mjs';
 
 export const name = 'S11 오프라인 큐 다건 누적 + 리로드 후 자동 플러시';
@@ -132,14 +129,13 @@ export async function run() {
       if (ctx.errors[i].includes('ERR_INTERNET_DISCONNECTED')) ctx.errors.splice(i, 1);
     }
 
-    // ③ 네트워크 복구 + 리로드(=네트워크가 살아난 뒤 다음 방문객이 켠 상황) — 부팅 시 자동
-    // flush()가 이번엔 성공해 큐 2건이 전부 비워져야 한다. 리로드 없이 네트워크만 복구했을 때
-    // 자동으로 비워지는 트리거는 코드에 없다(위 파일 상단 주석 참고) — 그래서 이 시나리오는
-    // 그 경우를 테스트하지 않는다(존재하지 않는 동작을 강제하면 항상 빨간 시나리오가 된다).
+    // ③ 리로드 없이 네트워크만 복구 — 부스 태블릿은 한 세션을 오래 켜두므로, 리로드를 기다려야
+    // 비워지면 그때까지 수집이 밀린다. main.js가 online 이벤트에도 flush를 걸어두므로 큐가
+    // 스스로 비워져야 한다.
     blocked = false;
-    await page.reload({ waitUntil: 'networkidle0' });
-    // 부팅 flush()는 비동기이고 완료를 기다리는 별도 신호가 없어, 큐가 비워질 때까지 폴링한다.
-    await page.waitForFunction(() => {
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    // flush는 비동기이고 완료 신호가 따로 없어 큐가 비워질 때까지 폴링한다.
+    const emptied = () => {
       try {
         const raw = localStorage.getItem('pendingResponses');
         const parsed = raw ? JSON.parse(raw) : [];
@@ -147,9 +143,15 @@ export async function run() {
       } catch {
         return false;
       }
-    }, { timeout: 15000 });
+    };
+    await page.waitForFunction(emptied, { timeout: 15000 });
     count = await queueLength(page);
-    if (count !== 0) throw new Error(`네트워크 복구 후 리로드했는데도 큐 길이 ${count} (기대: 0)`);
+    if (count !== 0) throw new Error(`네트워크 복구(online) 후에도 큐 길이 ${count} (기대: 0)`);
+
+    // ④ 리로드 후에도 비워진 상태가 유지되는지(부팅 flush가 이미 빈 큐를 건드려 되살리지 않는지).
+    await page.reload({ waitUntil: 'networkidle0' });
+    count = await queueLength(page);
+    if (count !== 0) throw new Error(`리로드 후 큐가 되살아남: 길이 ${count} (기대: 0)`);
 
     await ctx.shot('s11-queue-flushed');
   });
