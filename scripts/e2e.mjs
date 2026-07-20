@@ -6,6 +6,8 @@ import { startApp, stopApp } from './e2e/harness.mjs';
 const scenarioModules = [
   './e2e/scenarios/s0-start.mjs',
   './e2e/scenarios/s1-overlay-flow.mjs',
+  './e2e/scenarios/s2-solo-identity.mjs',
+  './e2e/scenarios/s3-vision-mock.mjs',
 ];
 
 execSync('npm run build', { stdio: 'inherit' });
