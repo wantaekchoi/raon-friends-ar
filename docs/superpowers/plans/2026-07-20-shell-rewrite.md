@@ -806,6 +806,7 @@ export function createOnceGuard() {
 - [x] **Step 2: labels.js·start-screen.js로 기계적 이동** — main.js에서 해당 블록(라벨 대입 전부 / `initOnboarding`·캐릭터 카드·크기 칩·운영자 시트·언어 토글·효과음 토글)을 함수로 감싸 이동. 코드 내용 변경 금지, import만 정리.
 - [x] **Step 3: main.js 재작성** — 남는 것: import·전역 에러 가드(showErrorScreen)·store/router/guide 생성·진입 핸들러(startOverlayFlow/enterMarkerMode/enterVisionMode/startMarkerFlow — guide·router·entry 사용으로 축약)·goHome/popstate·XR/QuickLook 버튼·기념사진·SW 등록. 각 핸들러는 기존 본문을 유지하되 syncScreen→router, activeScene→guide.setScene, guideSpeakerLock→guide.lockTo로 치환.
 - [x] **Step 4: 검증** — `wc -l src/main.js` ≤ 150 / `grep -c "?\\." src/main.js`에서 씬 가드 0 / `grep -c "style.display" src/main.js` = 0 / `npm test`·`npm run e2e` 전체 그린 + 스크린샷 대조. **Commit** — `refactor: main.js 부트스트랩化 — entry/labels/start-screen 분리 (932→≤150줄)`
+  - **실제 결과(2026-07-20)**: 932→**377줄로 목표(≤150) 미달**. 씬 가드 0·`style.display` 0·테스트/E2E 전체 그린은 달성. 미달 사유: `submitAndRetry`(전송 재시도)·`startDirectSurvey`·키오스크 타이머·WebXR/QuickLook 핸들러·`surveyHandlers`가 3~4곳에서 공유되는 횡단 관심사라 entry/labels/start-screen 3분할에 자연스러운 소유자가 없었고, 4번째 파일 신설은 계획에 없는 재설계라 보류했다. 후속 후보는 NEXT_STEP 참고.
 
 ### Task 11: overlay orientationProvider 주입 + 자이로 E2E
 

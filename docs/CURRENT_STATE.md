@@ -46,7 +46,7 @@
   - **`src/app/` 9모듈** — `store.js`(URL 파라미터 파싱+구독 상태 단일화)·`storage-keys.js`(localStorage 키 상수화)·`router.js`(`data-screen`/`data-mode` 단일 소유, `style.display` 토글 완전 제거)·`scenes.js`(`asScene`/`NullScene` 계약 — 씬 메서드 optional-chaining 가드 제거)·`guide.js`(안내·설문 흐름, 모드 무관)·`entry.js`(`createOnceGuard` — 모드 진입 중복 가드 통합 + 재무장)·`labels.js`(정적 라벨 대입)·`start-screen.js`(온보딩·크기 칩·운영자 시트·언어/음소거 토글)·`timing.js`(`scaledMs` — `?timerScale=`로 E2E 대기시간 단축).
   - **자이로 provider 주입** — `src/scenes/overlay.js`의 `deviceorientation` 구독을 `orientationProvider` 주입형으로 바꿔 S7이 `window.__fakeOrientation`으로 헤드리스 검증(렌더링·기본 동작 불변).
   - **three.js dedupe** — `vite.config.js`에 `resolve.dedupe: ['three']` 추가. 실측: 프로덕션 빌드+`vite preview`(E2E가 검증하는 환경)는 dedupe 적용 전에도 Rollup이 동일 파일로 정적 결합해 "Multiple instances of Three.js" 경고 0건(적용 후도 동일, 회귀 없음). 반면 `npm run dev`는 esbuild optimizeDeps가 `mind-ar`/`three/addons/loaders/FBXLoader.js`의 내부 `three` 임포트를 별도 프리번들 사본으로 분리해 경고가 실제로 재현됨(dedupe 적용으로도 dev 모드 자체는 완전히 해소되지 않음 — 근본 해결은 `optimizeDeps.exclude`가 필요해 범위 밖, NEXT_STEP 참고). S0에 `ctx.warnings`(harness가 새로 수집하는 console.warn 전수, 기존 에러 판정과 별개) 기반 회귀 방지 단언 추가.
-  - **성과 수치** — `main.js` 932→377줄(목표 150은 미달 — 배선 코드 특성상 남은 것으로 판단, 사유는 계획서 Task 10 기록) · `style.display` 산발 토글 0건 · 씬 메서드 호출부 optional-chaining 가드 0건(`NullScene`으로 대체) · 테스트 102→120개(store 3·scenes 2·timing 4·entry 4·router 2·guide 3 신규) · E2E 8종 전체 그린 · CI e2e 게이트 그린.
+  - **성과 수치** — `main.js` 932→377줄(목표 150은 미달 — 배선 코드 특성상 남은 것으로 판단, 사유는 계획서 Task 10 기록) · `style.display` 산발 토글 0건 · 씬 메서드 호출부 optional-chaining 가드 0건(`NullScene`으로 대체) · 테스트 102→120개(store 3·scenes 2·timing 4·entry 4·router 2·guide 3 신규) · E2E 8종 로컬 전체 그린 · CI(GitHub Actions)에 e2e 게이트 적용 — 배포 전 8종을 실행해 실패 시 배포 차단.
 
 ## 아직 안 된 것
 
