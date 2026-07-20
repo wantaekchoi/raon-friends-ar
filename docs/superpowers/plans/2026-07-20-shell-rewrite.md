@@ -768,7 +768,7 @@ describe('createGuide', () => {
 - Rewrite: `src/main.js` (≤150줄 목표)
 
 **Interfaces (Produces):**
-- `createOnceGuard()` → `guard(fn)` — 첫 호출만 실행(진입 중복 방지 3벌 통합). 테스트: 두 번 호출 시 fn 1회.
+- `createOnceGuard()` → `guard(fn)` — 첫 호출만 실행(진입 중복 방지 3벌 통합) + `guard.reset()` — 진입이 실패로 끝났을 때 재무장. **정정(2026-07-20 Task 10 리뷰)**: 최초 설계는 재무장을 YAGNI로 뒀으나, 기존 코드는 모듈 import 실패 catch에서 `xxxEntering = false`로 재시도를 허용했다 — 재무장이 없으면 버튼이 살아 보이는데 영원히 무반응(무인 부스에서 자동 회복 불가). 동작 보존 원칙이 우선하므로 reset을 포함한다.
 - `bindLabels(config)` (labels.js) — 현재 main.js의 `document.getElementById(...).textContent = CONFIG...` 라벨 대입 ~30줄 전부 이동.
 - `initStartScreen({ config, store, sound, onOverlay, onMarker, onVision, onDirectSurvey })` (start-screen.js) — 온보딩·캐릭터 카드·크기 칩·운영자 시트·언어 토글·효과음 토글 이동.
 

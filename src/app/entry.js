@@ -10,14 +10,18 @@ import { scaledMs } from './timing.js';
 import { STORAGE_KEYS } from './storage-keys.js';
 
 // 모드 진입 중복 가드 — 기존 overlayEntering/markerEntering/visionEntering 3벌의 공통화.
-// 진입은 페이지 수명당 1회(성공 후 홈은 reload)라 재무장(reset)은 두지 않는다(YAGNI).
+// 진입은 페이지 수명당 1회(성공 후 홈은 reload)가 기본이라 재무장은 기본적으로 두지 않지만,
+// 진입이 실패로 끝났을 때만(예: 동적 import 실패) 호출부가 명시적으로 guard.reset()을 불러
+// 재시도를 허용할 수 있다(성공 시엔 재진입 없음 — reset()을 호출하지 않는다).
 export function createOnceGuard() {
   let entered = false;
-  return async (fn) => {
+  const guard = async (fn) => {
     if (entered) return;
     entered = true;
     return fn();
   };
+  guard.reset = () => { entered = false; };
+  return guard;
 }
 
 // iOS Safari의 AR Quick Look 지원 감지 — rel="ar" 앵커를 지원하면 네이티브 ARKit 뷰어 사용 가능
@@ -143,10 +147,10 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
         labelEl.textContent = labelBeforeLoad;
         btnMarker.classList.remove('btn-loading');
         btnMarker.disabled = false;
-        // 원본은 이 실패 경로에서만 markerEntering을 되돌려 재시도를 허용했다 — 통합 가드
-        // (createOnceGuard)는 재무장을 두지 않는 설계라 이 재시도 창구는 사라진다. 실사용에서는
-        // 청크 로드 실패 같은 일회성 네트워크 문제라 페이지 리로드로도 복구되고, 이 앱의 다른
-        // 두 진입 가드(overlay/vision)도 동일하게 "한 번만" 정책이라 일관성을 택했다(보고서 참조).
+        // 원본(main.js)은 이 실패 경로에서만 markerEntering을 되돌려 재시도를 허용했다 — 버튼은
+        // 복원됐는데 가드만 잠긴 채면 클릭이 조용히 무시되는 회귀가 생긴다(리뷰 Important). 동일하게
+        // guardMarker를 재무장해 다음 클릭이 다시 import를 시도하게 한다.
+        guardMarker.reset();
         return;
       }
       btnMarker.classList.remove('btn-loading');
@@ -241,6 +245,9 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
         labelEl.textContent = labelBeforeLoad;
         btnVision.classList.remove('btn-loading');
         btnVision.disabled = false;
+        // 마커 모드와 동일한 이유로 guardVision을 재무장한다 — 버튼만 복원되고 가드가 잠긴 채면
+        // 다음 클릭이 조용히 무시된다(리뷰 Important).
+        guardVision.reset();
         return;
       }
       btnVision.classList.remove('btn-loading');
