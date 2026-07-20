@@ -16,10 +16,11 @@ import { createRecognitionGate } from '../vision/recognition-gate.js';
  *   onRecognized: (key: string) => void,
  *   onError?: (err: Error) => void,
  *   onProgress?: (frame: { label: string, score: number }) => void,
+ *   cameraFacing?: 'environment' | 'user',
  * }} opts
  * @returns {Promise<{ stop(): void }>}
  */
-export async function initVision({ containerEl, onRecognized, onError, onProgress }) {
+export async function initVision({ containerEl, onRecognized, onError, onProgress, cameraFacing = 'environment' }) {
   containerEl.innerHTML = '';
   const videoEl = document.createElement('video');
   videoEl.className = 'vision-video';
@@ -30,7 +31,9 @@ export async function initVision({ containerEl, onRecognized, onError, onProgres
 
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    // E2 매직미러(?camera=user)에서도 스캔 카메라와 이후 오버레이 카메라가 같은 방향을 보도록
+    // cameraFacing을 그대로 넘겨받는다(overlay.js와 동일 옵션명).
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cameraFacing }, audio: false });
   } catch (e) {
     onError?.(Object.assign(new Error('camera-permission-denied'), { cause: e }));
     return { stop() {} };
@@ -59,12 +62,13 @@ export async function initVision({ containerEl, onRecognized, onError, onProgres
 
   let stopped = false;
   let resolved = false; // 인식이 확정된 이후엔 추가 tick을 무시한다(중복 onRecognized 방지)
+  let paused = false; // 4단계: 탭/앱이 백그라운드로 전환되면 추론을 멈춘다(배터리·오탐 방지)
 
   async function tick() {
-    if (stopped || resolved) return;
+    if (stopped || resolved || paused) return;
     try {
       const result = await classifier.classify(videoEl);
-      if (stopped || resolved || !result) return;
+      if (stopped || resolved || paused || !result) return;
       onProgress?.(result);
       const confirmedKey = gate.push(result);
       if (confirmedKey) {
@@ -79,10 +83,19 @@ export async function initVision({ containerEl, onRecognized, onError, onProgres
 
   const timer = setInterval(tick, CONFIG.vision.classifyIntervalMs);
 
+  // 4단계(백그라운드 전환): 탭이 숨겨지면 추론을 멈추고, 돌아오면 재개한다. 카메라 스트림 자체는
+  // 끊지 않는다 — 브라우저가 자체적으로 트랙을 일시정지시키는 경우가 많고, 재획득 시 재권한 요청이
+  // 뜰 수 있어(iOS) 스트림은 살려둔 채 추론만 멈추는 편이 더 안전하다.
+  function handleVisibilityChange() {
+    paused = document.visibilityState === 'hidden';
+  }
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
   function stop() {
     if (stopped) return;
     stopped = true;
     clearInterval(timer);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
     stream.getTracks().forEach((track) => track.stop());
     classifier?.dispose?.();
     containerEl.innerHTML = '';

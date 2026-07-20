@@ -143,6 +143,8 @@ document.getElementById('vision-hint').textContent = CONFIG.ui.visionHint;
 document.getElementById('vision-error-message').textContent = CONFIG.ui.visionErrorMessage;
 document.getElementById('btn-vision-fallback-overlay').textContent = CONFIG.ui.btnVisionFallbackOverlay;
 document.getElementById('btn-vision-fallback-survey').textContent = CONFIG.ui.btnVisionFallbackSurvey;
+document.getElementById('btn-vision-back').textContent = '←';
+document.getElementById('btn-vision-back').setAttribute('aria-label', CONFIG.ui.btnVisionBackAria);
 document.getElementById('hint-text').textContent = CONFIG.ui.hint;
 document.getElementById('brand-line').textContent = CONFIG.ui.brandLine;
 document.getElementById('marker-hint').textContent = CONFIG.ui.markerHint;
@@ -547,8 +549,14 @@ async function enterVisionMode() {
   screenVision.style.display = 'block';
   const hint = document.getElementById('vision-hint');
   const errorPanel = document.getElementById('vision-error');
+  const backBtn = document.getElementById('btn-vision-back');
   hint.hidden = false;
   errorPanel.hidden = true;
+
+  // 4단계(모델 로딩 중 화면 이탈): initVision()이 아직 카메라·WASM·모델을 로딩하는 도중에도
+  // 뒤로가기로 빠져나갈 수 있어야 한다. aborted는 "이 화면을 이미 벗어났다"는 표시로, 뒤늦게
+  // onRecognized/onError가 호출되거나 initVision()이 뒤늦게 resolve돼도 무시하고 즉시 정리한다.
+  let aborted = false;
 
   function showVisionError() {
     hint.hidden = true;
@@ -561,6 +569,14 @@ async function enterVisionMode() {
     screenVision.style.display = 'none';
   }
 
+  backBtn.addEventListener('click', () => {
+    aborted = true;
+    visionSession?.stop();
+    // 다른 모든 "처음으로" 동작(btn-restart 등)과 동일하게 전체 리로드로 되돌아간다 —
+    // 진행 중이던 getUserMedia·WASM 로딩·타이머까지 확실하게 정리되는 가장 안전한 방법이다.
+    location.reload();
+  }, { once: true });
+
   document.getElementById('btn-vision-fallback-overlay').addEventListener('click', () => {
     exitVisionScreen();
     document.getElementById('btn-overlay').click();
@@ -571,9 +587,12 @@ async function enterVisionMode() {
   }, { once: true });
 
   try {
-    visionSession = await initVision({
+    const session = await initVision({
       containerEl: document.getElementById('vision-container'),
+      // E2 매직미러(?camera=user)에서도 스캔 카메라가 이후 오버레이와 같은 방향을 보게 한다.
+      ...(cameraFacingParam !== undefined && { cameraFacing: cameraFacingParam }),
       onRecognized(key) {
+        if (aborted) return; // 이미 화면을 벗어남 — 세션은 아래 finally 격 로직에서 정리된다
         // 3단계: 인식된 캐릭터(raong/raoni/raona)로 안내 전체 화자를 고정한다 — ?char=와 동일한
         // 공통 함수(solo-character.js)를 재사용. flow.start() 이전(가이드 시작 전)이라 안전하게
         // 통째로 재생성할 수 있다. key가 'unknown'이거나 미등록 값이면(정상 경로에서는 발생하지
@@ -583,13 +602,21 @@ async function enterVisionMode() {
         document.getElementById('btn-overlay').click();
       },
       onError(err) {
+        if (aborted) return;
         console.warn('비전 인식 실패 — 폴백 안내 노출', err);
         showVisionError();
       },
     });
+    if (aborted) {
+      session?.stop(); // 로딩 도중 뒤로가기를 눌렀다면 방금 막 만들어진 세션(카메라 등)을 즉시 정리
+    } else {
+      visionSession = session;
+    }
   } catch (err) {
-    console.warn('비전 모드 초기화 실패 — 폴백 안내 노출', err);
-    showVisionError();
+    if (!aborted) {
+      console.warn('비전 모드 초기화 실패 — 폴백 안내 노출', err);
+      showVisionError();
+    }
   }
 
   visionEntering = false;

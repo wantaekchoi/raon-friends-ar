@@ -316,11 +316,25 @@ body.no-camera #screen-ar { background: linear-gradient(180deg, #2b1a3a, #6b3f8f
 #vision-container { position: absolute; inset: 0; }
 .vision-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 #vision-hint {
-  /* F2 접근성: #marker-hint와 동일한 배색(흰 배경에 #a83c08, 4.5:1 이상) 재사용 */
-  position: absolute; top: max(24px, env(safe-area-inset-top)); left: 16px; right: 16px;
+  /* F2 접근성: #marker-hint와 동일한 배색(흰 배경에 #a83c08, 4.5:1 이상) 재사용.
+     좌측은 #btn-vision-back(40px 원형 버튼)과 겹치지 않도록 여백을 더 둔다. */
+  position: absolute; top: max(24px, env(safe-area-inset-top));
+  left: calc(64px + env(safe-area-inset-left)); right: 16px;
   z-index: 2; text-align: center;
   background: rgba(255, 255, 255, 0.92); border-radius: 20px; padding: 14px 18px;
   font-weight: 700; color: #a83c08; box-shadow: 0 10px 28px rgba(232, 89, 12, 0.18);
+}
+/* 4단계: 모델 로딩 중에도(에러가 나기 전에도) 언제든 빠져나갈 수 있는 뒤로가기 —
+   marker-fallback과 달리 타임아웃 없이 스캔 시작과 동시에 항상 노출한다. */
+#btn-vision-back {
+  position: absolute; left: max(14px, env(safe-area-inset-left));
+  top: max(14px, env(safe-area-inset-top)); z-index: 2;
+  width: 40px; height: 40px; border: none; border-radius: 50%;
+  background: rgba(30, 20, 10, 0.55); color: #fff;
+  font-size: 1.1rem; line-height: 1; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 /* 주의: display를 #vision-error에 무조건 선언하면 ID 선택자가 UA의 [hidden]{display:none}보다
    우선해 hidden 속성이 무력화된다(.google-form-link 주석과 동일한 함정) — :not([hidden])로 범위를

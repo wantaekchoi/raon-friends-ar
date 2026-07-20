@@ -76,13 +76,28 @@ async function createRealClassifier() {
 
   const fileset = await FilesetResolver.forVisionTasks(WASM_BASE_URL);
   const modelAssetPath = `${import.meta.env.BASE_URL}${CONFIG.vision.modelPath}`;
-
-  const imageClassifier = await ImageClassifier.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath, delegate: 'GPU' },
+  const commonOptions = {
+    baseOptions: { modelAssetPath },
     runningMode: 'VIDEO',
     maxResults: 1,
     scoreThreshold: 0, // 정렬·게이팅은 recognition-gate.js가 담당 — 여기서는 거르지 않고 최상위 1건만 받는다
-  });
+  };
+
+  // 4단계(저사양 기기 대비): GPU 델리게이트를 먼저 시도하고, WebGL 미지원 등으로 생성 자체가
+  // 실패하면 CPU로 한 번 더 시도한다. 두 시도 모두 실패해야 진짜로 reject한다.
+  let imageClassifier;
+  try {
+    imageClassifier = await ImageClassifier.createFromOptions(fileset, {
+      ...commonOptions,
+      baseOptions: { ...commonOptions.baseOptions, delegate: 'GPU' },
+    });
+  } catch (gpuErr) {
+    console.warn('[vision] GPU 델리게이트 생성 실패 — CPU로 재시도', gpuErr);
+    imageClassifier = await ImageClassifier.createFromOptions(fileset, {
+      ...commonOptions,
+      baseOptions: { ...commonOptions.baseOptions, delegate: 'CPU' },
+    });
+  }
 
   let lastVideoTime = -1;
 

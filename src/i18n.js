@@ -129,6 +129,7 @@ export const STRINGS = {
       visionErrorMessage: '앗, 지금은 AI 인식을 준비하지 못했어요 🙈 다른 방법으로 참여해주세요!',
       btnVisionFallbackOverlay: '오버레이 모드로 만나기',
       btnVisionFallbackSurvey: '설문으로 바로 참여하기',
+      btnVisionBackAria: '뒤로가기',
     },
   },
   en: {
@@ -255,6 +256,7 @@ export const STRINGS = {
       visionErrorMessage: "Oops, AI recognition isn't ready right now 🙈 Please try another way to join!",
       btnVisionFallbackOverlay: 'Meet via overlay mode',
       btnVisionFallbackSurvey: 'Jump straight to the survey',
+      btnVisionBackAria: 'Back',
     },
   },
 };
