@@ -1,7 +1,9 @@
 // 오프라인 응답 큐 — 설문 전송이 실패하면(오프라인 등) localStorage에 보관해두고,
 // 앱 재시작 시나 재시도 성공 시 다시 전송을 시도한다. 설계서 D2 참조.
 
-const STORAGE_KEY = 'pendingResponses';
+import { STORAGE_KEYS } from './app/storage-keys.js';
+
+const STORAGE_KEY = STORAGE_KEYS.surveyQueue;
 
 function readQueue() {
   let raw;

@@ -19,7 +19,9 @@
 //   sound.play('twinkle');  // 하트 리액션(별점 4~5점, 쓰다듬기 파티클)
 //   sound.play('tap');      // 버튼 탭(다음/재시도/재시작 등)
 
-const STORAGE_KEY = 'soundMuted';
+import { STORAGE_KEYS } from './app/storage-keys.js';
+
+const STORAGE_KEY = STORAGE_KEYS.soundMuted;
 
 function readMuted() {
   try {

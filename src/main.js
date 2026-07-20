@@ -11,6 +11,7 @@ import { initSound } from './sound.js';
 import { captureMoment } from './capture.js';
 import { buildSoloGuideScript } from './solo-character.js';
 import { scaledMs } from './app/timing.js';
+import { STORAGE_KEYS } from './app/storage-keys.js';
 
 // F1 다국어 — html lang·문서 제목을 현재 언어에 맞춘다 (CONFIG.lang은 config.js가 모듈 로드
 // 시점에 currentLang()으로 이미 판별해 둔 값).
@@ -254,7 +255,7 @@ function syncScreen() {
 // 온보딩 1장 (D4 리서치 보완 ①) — 최초 방문에만 카메라 허용→바닥 비추기→캐릭터 등장
 // 3스텝을 안내한다. localStorage에 본 적 있으면 다시 띄우지 않는다.
 // ===========================================================================
-const ONBOARDING_SEEN_KEY = 'onboardingSeen';
+const ONBOARDING_SEEN_KEY = STORAGE_KEYS.onboardingSeen;
 function initOnboarding() {
   const el = document.getElementById('onboarding');
   document.getElementById('onboarding-title').textContent = CONFIG.onboarding.title;
@@ -392,9 +393,9 @@ async function startOverlayFlow() {
     } else {
       // 자이로가 켜져 있어도 위치(6DoF)는 추적 불가 — 최초 1회만 행동 유도 (걸어가면 밀려나는 한계 안내)
       try {
-        if (!localStorage.getItem('overlayLookHintSeen')) {
+        if (!localStorage.getItem(STORAGE_KEYS.overlayLookHintSeen)) {
           hintText = CONFIG.ui.overlayLookHint;
-          localStorage.setItem('overlayLookHintSeen', '1');
+          localStorage.setItem(STORAGE_KEYS.overlayLookHintSeen, '1');
         }
       } catch { /* localStorage 불가 — 힌트 생략 */ }
     }
