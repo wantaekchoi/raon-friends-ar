@@ -26,6 +26,33 @@ const CHARACTER_ASSETS = {
   },
 };
 
+// 3단 톤 그라데이션 (어두움→중간→밝음) — MeshToonMaterial 기본 2단보다 부드러운 경계
+let toonGradient = null;
+function getToonGradient() {
+  if (!toonGradient) {
+    toonGradient = new THREE.DataTexture(new Uint8Array([140, 200, 255]), 3, 1, THREE.RedFormat);
+    toonGradient.minFilter = THREE.NearestFilter;
+    toonGradient.magFilter = THREE.NearestFilter;
+    toonGradient.needsUpdate = true;
+  }
+  return toonGradient;
+}
+
+// 기존 머티리얼의 색·텍스처·투명도만 승계해 무광 툰 머티리얼로 변환한다.
+function toCuteToon(m) {
+  const toon = new THREE.MeshToonMaterial({
+    color: m.color ? m.color.clone() : new THREE.Color(0xffffff),
+    map: m.map ?? null,
+    gradientMap: getToonGradient(),
+    transparent: !!m.transparent,
+    opacity: m.opacity ?? 1,
+    side: m.side ?? THREE.FrontSide,
+  });
+  toon.vertexColors = !!m.vertexColors; // 정점색 보정 규칙(위)의 결과를 그대로 승계
+  toon.name = m.name;
+  return toon;
+}
+
 export async function loadCharacter(key) {
   const assets = CHARACTER_ASSETS[key];
   if (!assets) {
@@ -81,20 +108,10 @@ export async function loadCharacter(key) {
           m.needsUpdate = true;
         }
 
-        // 광택 감소 — 동물 fur 무광 느낌 (라옹·라오니·라오나 3캐릭터 공통).
-        // FBXLoader는 재질에 따라 MeshPhongMaterial(shininess/specular) 또는
-        // MeshStandardMaterial(roughness/metalness)을 만들 수 있어 둘 다 처리한다.
-        if ('shininess' in m) {
-          if (m === orig) m = m.clone();
-          m.shininess = Math.min(m.shininess, 8);
-          if (m.specular) m.specular = new THREE.Color(0x111111);
-          m.needsUpdate = true;
-        } else if ('roughness' in m) {
-          if (m === orig) m = m.clone();
-          m.roughness = Math.max(m.roughness, 0.9);
-          m.metalness = Math.min(m.metalness, 0.05);
-          m.needsUpdate = true;
-        }
+        // 부드러운 셀 셰이딩(MeshToonMaterial) 변환 — 광택 하이라이트("번들거림")를 원천 제거하고
+        // 만화풍의 귀여운 톤으로. 3단 그라데이션 맵으로 명암 경계를 부드럽게 한다.
+        // (털 셰이더 같은 고부하 효과 없이 Phong보다 가벼움 — 2026-07-20 사용자 피드백)
+        m = toCuteToon(m);
 
         mats[i] = m;
       });
