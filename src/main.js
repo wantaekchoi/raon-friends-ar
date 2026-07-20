@@ -908,6 +908,11 @@ btnXR.addEventListener('click', async () => {
     character: characterCache.get(currentSpeaker),
     overlayRoot: document.getElementById('screen-ar'),
     ...(characterHeight !== undefined && { characterHeight }),
+    // renderer.xr.setSession()은 실제 비동기 작업이라 await 뒤에서 모드를 전환하면 그 사이
+    // 리페인트가 끼어들어 XR 캔버스와 기존 2D 오버레이가 함께 보이는 이중 노출/깜빡임이
+    // 생길 수 있다 — scenes/webxr.js가 appendChild 이전(세션 end 리스너 등록 직후) 시점에
+    // 동기 호출하는 콜백으로 넘겨 그 타이밍에 맞춘다.
+    onSessionGranted: () => router.setMode('xr'),
     // 바닥 인식(레티클)이 배치되면 힌트 타이머를 취소 — 트래킹 실패 안내(D)
     onPlaced: hideXRHint,
     onEnd: () => {
@@ -933,7 +938,8 @@ btnXR.addEventListener('click', async () => {
     return;
   }
 
-  router.setMode('xr'); // scenes/webxr.js가 세션 시작에 성공해 xr을 반환한 시점과 동일한 순서
+  // router.setMode('xr')는 onSessionGranted 콜백으로 scenes/webxr.js 내부에서 이미
+  // (appendChild·setSession await 이전 시점에) 동기 호출됐다 — 여기서 다시 부르지 않는다.
   overlay.pause();
   activeScene = xr;
   btnXR.hidden = true;

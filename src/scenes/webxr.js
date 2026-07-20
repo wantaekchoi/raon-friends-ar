@@ -36,6 +36,7 @@ export async function startXR({
   overlayRoot,
   onPlaced,
   onEnd,
+  onSessionGranted,
   characterHeight = 1.2,
 } = {}) {
   if (!(await isXRSupported())) return null;
@@ -193,9 +194,12 @@ export async function startXR({
     onEnd?.();
   });
 
-  // data-mode="xr" 설정(#camera-video 등 기존 오버레이 캔버스 숨김)은 호출부(main.js)가
-  // startXR()이 xr을 반환한 직후 router.setMode('xr')로 처리한다 — 화면·모드 전환은 router가
-  // 단독 소유한다(src/app/router.js).
+  // data-mode="xr" 설정(#camera-video 등 기존 오버레이 캔버스 숨김)은 appendChild·
+  // setSession(session)의 await보다 반드시 먼저 끝나야 이중 노출/깜빡임이 없다 — 그래서
+  // 호출부(main.js)의 router.setMode('xr')를 여기서 동기 콜백(onSessionGranted)으로 즉시
+  // 실행한다. 화면·모드 전환은 router가 단독 소유한다(src/app/router.js).
+  onSessionGranted?.();
+
   document.getElementById('screen-ar').appendChild(renderer.domElement);
 
   renderer.xr.setReferenceSpaceType('local');
