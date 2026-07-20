@@ -58,9 +58,6 @@ export async function withPage(fn, { params = '', allowErrors } = {}) {
   page.on('console', (m) => {
     if (m.type() === 'warning') warnings.push(m.text());
     if (m.type() !== 'error') return;
-    // 브라우저가 페이지 콘텐츠와 무관하게 항상 자동 요청하는 /favicon.ico 404는 앱 리소스가 아니라
-    // 브라우저 자체의 관례적 요청이므로 제외한다. 그 외 모든 리소스 404(sw 캐시 미스 등)는 계속 실패로 취급한다.
-    if (m.location()?.url?.endsWith('/favicon.ico')) return;
     errors.push(`console: ${m.text()}`);
   });
   const ctx = {
@@ -71,8 +68,8 @@ export async function withPage(fn, { params = '', allowErrors } = {}) {
   try {
     await page.goto(`${BASE_URL}${params}`, { waitUntil: 'networkidle0' });
     await fn(page, ctx);
-    // 콘솔/페이지 에러 0건 원칙. 유일한 예외는 위의 /favicon.ico 404 한 건뿐이며(앱에 favicon이
-    // 없어 브라우저 자동 요청이 항상 404) — 그 외 어떤 리소스 404·에러도 전부 실패로 취급한다.
+    // 콘솔/페이지 에러 0건 원칙 — 리소스 404를 포함해 무조건 실패로 취급한다(index.html이 파비콘을
+    // 명시하므로 브라우저의 /favicon.ico 자동 요청도 더는 발생하지 않는다).
     // allowErrors가 주어지면 그 패턴에 매칭되는 항목만 추가로 걸러내고, 나머지는 그대로 실패시킨다.
     const unexpected = allowErrors
       ? errors.filter((e) => !allowErrors.some((re) => re.test(e)))
