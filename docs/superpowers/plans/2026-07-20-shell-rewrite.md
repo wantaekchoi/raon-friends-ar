@@ -30,7 +30,7 @@
 - Create: `scripts/e2e.mjs`
 
 **Interfaces (Produces):**
-- `withPage(fn, {params, lang})` — preview 서버 위 새 브라우저 컨텍스트에서 `fn(page, ctx)` 실행. `ctx.errors`(pageerror+console.error 수집 배열), `ctx.shot(name)`(스크린샷 저장). fn 종료 후 `ctx.errors`가 비어있지 않으면 throw.
+- `withPage(fn, {params})` — preview 서버 위 새 브라우저 컨텍스트에서 `fn(page, ctx)` 실행 (언어 등 URL 상태는 전부 `params` 쿼리스트링으로). `ctx.errors`(pageerror+console.error 수집 배열), `ctx.shot(name)`(스크린샷 저장). fn 종료 후 `ctx.errors`가 비어있지 않으면 throw.
 - 시나리오 모듈 계약: `export const name = '...'; export async function run() { ... }` — 실패 시 throw.
 - `npm run e2e` — 빌드→preview 기동→전 시나리오 순차 실행→요약 출력, 실패 시 exit 1.
 

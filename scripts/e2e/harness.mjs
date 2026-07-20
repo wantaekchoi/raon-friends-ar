@@ -58,8 +58,8 @@ export async function withPage(fn, { params = '' } = {}) {
   try {
     await page.goto(`${BASE_URL}${params}`, { waitUntil: 'networkidle0' });
     await fn(page, ctx);
-    // 리소스 404(sw 캐시 미스 등 무해 케이스)는 여기서 필터링하지 말 것 — 전부 실패로 취급해
-    // "에러 0" 원칙을 유지한다. 예외가 필요해지면 시나리오가 아니라 앱을 고친다.
+    // 콘솔/페이지 에러 0건 원칙. 유일한 예외는 위의 /favicon.ico 404 한 건뿐이며(앱에 favicon이
+    // 없어 브라우저 자동 요청이 항상 404) — 그 외 어떤 리소스 404·에러도 전부 실패로 취급한다.
     if (errors.length) throw new Error(`콘솔/페이지 에러 ${errors.length}건:\n${errors.join('\n')}`);
   } finally {
     await context.close();

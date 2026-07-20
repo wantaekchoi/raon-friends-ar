@@ -10,6 +10,7 @@ export async function run() {
       overlay: document.getElementById('btn-overlay-label').textContent,
       marker: document.getElementById('btn-marker-label').textContent,
       vision: document.getElementById('btn-vision-label').textContent,
+      langToggle: document.getElementById('btn-lang-toggle').textContent,
       screen: document.body.dataset.screen,
     }));
     if (!state.title.includes('라온 프렌즈')) throw new Error(`타이틀 이상: ${state.title}`);
