@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - `npm install`은 로컬에서 반드시 `--ignore-scripts` (CLAUDE.md — canvas 빌드 회피). CI의 `npm ci`는 그대로.
-- main push = 즉시 배포. **Phase 중간 커밋은 로컬에만 쌓고, push는 각 Phase 완료(전체 그린) 시 1회.** force-push 금지.
+- main push = 즉시 배포. **각 태스크가 리뷰 통과하면 push** (사용자 지시 2026-07-20 — CI e2e 게이트가 매 push를 검증). force-push 금지.
 - 문서는 코드와 같은 커밋에. UI 문구는 i18n(ko/en) 사전에만, 값·타이밍은 config/모듈 상수로.
 - 시각·UX·대본·설문 내용 변경 금지 (스펙 Non-goals). leaf 모듈(scenes/* 내부, survey, queue, sound, motion, effects, capture, i18n, characters, solo-character) 재작성 금지.
 - 각 Task 완료 조건: `npm test` 전체 그린 + (E2E 존재 시) `npm run e2e` 전체 그린.
