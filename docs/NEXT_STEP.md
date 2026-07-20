@@ -10,7 +10,8 @@
 2. **시연 영상 촬영 + 신청서 제출** — 스토리보드(내부 보관 문서)대로 촬영(참여 컷 + 화면 캡처 + AI 활용 컷) → 업로드 → 신청서 확정·제출.
 3. **별점 1~2점 "sad" 리액션 유지 여부 (사용자 결정 대기)** — 낮은 점수를 준 방문객에게 캐릭터가 시무룩해하는 리액션(`src/motion.js`의 `sad` 모션, 1.1초 뒤 `wave`로 회복)이 부담을 주거나 응답을 유도하는 것처럼 보일 수 있다는 우려가 있어 유지 여부 결정 필요.
 4. **Vision AI 실 모델 제작·배치** — MediaPipe Model Maker(Colab)로 raong/raoni/raona/unknown 4라벨 분류기 학습(카드·렌더·굿즈 사진 각 수십 장+네거티브) → `public/models/vision/raon-mascot-classifier.tflite` 배치만 하면 코드 변경 없이 실 인식 활성화. 실기기에서 mock(`?visionMock=raong`)으로 흐름 먼저 확인 가능.
-5. **main.js 추가 축소 후보 (v1.4.0 셸 재작성 후속)** — 현재 377줄, 애초 목표(≤150줄)는 미달(사유: `docs/superpowers/plans/2026-07-20-shell-rewrite.md` Task 10 기록 — 부트스트랩 배선 자체가 본질적으로 남는 코드). 더 줄이려면: `submitAndRetry`(설문 재시도 루프), `startDirectSurvey`(비AR 직행 설문), 키오스크 리셋 타이머를 각각 별도 모듈로 추출하는 안을 검토할 것.
+5. **E2E 후속 (감사 잔여, 낮은 우선순위)** — WebXR·Quick Look 버튼 노출 조건 검증(`supportsQuickLook` 모킹), 오프라인 큐 다건·리로드 후 자동 플러시, S1/S5 catch의 실패 원인 구분(진단 품질), `--passWithNoTests` 제거, dev 모드 three 중복 경고(`optimizeDeps.exclude`).
+6. **main.js 추가 축소 후보 (v1.4.0 셸 재작성 후속)** — 현재 377줄, 애초 목표(≤150줄)는 미달(사유: `docs/superpowers/plans/2026-07-20-shell-rewrite.md` Task 10 기록 — 부트스트랩 배선 자체가 본질적으로 남는 코드). 더 줄이려면: `submitAndRetry`(설문 재시도 루프), `startDirectSurvey`(비AR 직행 설문), 키오스크 리셋 타이머를 각각 별도 모듈로 추출하는 안을 검토할 것.
 
 ## 낮은 우선순위 (동작에 지장 없음)
 

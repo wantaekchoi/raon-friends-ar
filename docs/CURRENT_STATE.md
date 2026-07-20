@@ -48,6 +48,8 @@
   - **three.js dedupe** — `vite.config.js`에 `resolve.dedupe: ['three']` 추가. 실측: 프로덕션 빌드+`vite preview`(E2E가 검증하는 환경)는 dedupe 적용 전에도 Rollup이 동일 파일로 정적 결합해 "Multiple instances of Three.js" 경고 0건(적용 후도 동일, 회귀 없음). 반면 `npm run dev`는 esbuild optimizeDeps가 `mind-ar`/`three/addons/loaders/FBXLoader.js`의 내부 `three` 임포트를 별도 프리번들 사본으로 분리해 경고가 실제로 재현됨(dedupe 적용으로도 dev 모드 자체는 완전히 해소되지 않음 — 근본 해결은 `optimizeDeps.exclude`가 필요해 범위 밖, NEXT_STEP 참고). S0에 `ctx.warnings`(harness가 새로 수집하는 console.warn 전수, 기존 에러 판정과 별개) 기반 회귀 방지 단언 추가.
   - **성과 수치** — `main.js` 932→377줄(목표 150은 미달 — 배선 코드 특성상 남은 것으로 판단, 사유는 계획서 Task 10 기록) · `style.display` 산발 토글 0건 · 씬 메서드 호출부 optional-chaining 가드 0건(`NullScene`으로 대체) · 테스트 102→120개(store 3·scenes 2·timing 4·entry 4·router 2·guide 3 신규) · E2E 8종 로컬 전체 그린 · CI(GitHub Actions)에 e2e 게이트 적용 — 배포 전 8종을 실행해 실패 시 배포 차단.
 
+- **E2E 감사 반영 (2026-07-20, v1.4.1)** — 별도 세션의 E2E 감사 지적을 실측 확인 후 조치: ① S0의 three 중복 경고 단언은 mind-ar 청크가 로드되지 않는 시작 화면이라 구조적으로 발화 불가(=무의미)여서 제거하고, 청크를 실제 로드하는 S4 것만 유지 ② 테스트 전용 파라미터 `?timerScale=`·`?fakeGyro=`를 localhost에서만 유효하도록 제한(`src/app/test-params.js`) — 공개 URL에서 키오스크 리셋 타이머·자이로를 왜곡할 수 있던 오작동 벡터 차단(`?visionMock=`은 실기기 시연용이라 제외) ③ 최대 커버리지 구멍이던 카드 소환 **성공** 경로를 `?markerMock=`(localhost 전용, 인식 이후 시퀀스를 실경로와 공유)으로 S8 신설 ④ 전역 에러 화면 S9·키오스크 자동 리셋 S10·언어 토글 클릭(S6) 추가. 신규 시나리오는 전부 음성통제(관련 로직 일시 파손 시 실패 확인)를 거쳤다. E2E 8종→11종, 테스트 120→127개.
+
 ## 아직 안 된 것
 
 [NEXT_STEP.md](NEXT_STEP.md) 참고. 요약: 구글 폼 동의 문항 entry 연결, 대시보드 시트 연동(csvUrl), 실기기 테스트, 시연 영상·신청서 제출, 별점 1~2점 "sad" 리액션 유지 여부 결정.
