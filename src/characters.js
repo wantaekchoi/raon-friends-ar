@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeVertices, mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -91,6 +91,27 @@ function getOutlineMaterial() {
   return outlineMaterial;
 }
 
+// 눈처럼 새까만 부위는 헐에서 제외한다 — 눈은 별도 메시가 아니라 얼굴 메시의 black(#020202)
+// 머티리얼 그룹이라, 헐이 눈 돌출부까지 부풀리면 쩜눈 둘레에 검은 테가 생겨 눈이 커지고 뭉개져
+// 보인다("눈이 징그럽다" 실기기 피드백 2026-07-21). 애초에 검정·네이비 면 위 잉크선은 대비가
+// 없어 안 보이므로, 초저휘도 그룹을 빼도 실루엣 말고는 잃는 게 없다.
+const OUTLINE_SKIP_LUMA = 0.08;
+function isInkDark(material) {
+  const c = material?.color;
+  if (!c) return false;
+  return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) < OUTLINE_SKIP_LUMA;
+}
+
+// 비인덱스드 FBX 지오메트리에서 특정 그룹 구간만 잘라낸다 (usdz-export.html의 sliceGeometry와 동일 기법)
+function sliceGroupRange(src, start, count) {
+  const geom = new THREE.BufferGeometry();
+  Object.entries(src.attributes).forEach(([name, attr]) => {
+    const arr = attr.array.slice(start * attr.itemSize, (start + count) * attr.itemSize);
+    geom.setAttribute(name, new THREE.BufferAttribute(arr, attr.itemSize, attr.normalized));
+  });
+  return geom;
+}
+
 // 캐릭터의 각 메시에 외곽선 헐을 자식으로 붙인다. 지오메트리는 정점 용접 후 법선 재계산 —
 // FBX의 하드엣지 분할 정점 그대로면 외곽선이 모서리에서 갈라진다. 스킨 속성은 떼어내므로
 // 스켈레탈 1본 변형(wave 등)은 못 따라가지만 두께가 얇아 어긋남이 경미하다(시안 노트).
@@ -98,7 +119,19 @@ function addToonOutline(group) {
   const meshes = [];
   group.traverse((o) => { if (o.isMesh) meshes.push(o); });
   for (const mesh of meshes) {
-    let g = mesh.geometry.clone();
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    let g;
+    if (Array.isArray(mesh.material) && mesh.geometry.groups?.length) {
+      // 멀티 머티리얼: 잉크선을 그릴 그룹(밝은 면)만 이어붙여 헐 지오메트리를 만든다
+      const parts = mesh.geometry.groups
+        .filter((grp) => !isInkDark(mats[grp.materialIndex] ?? mats[0]))
+        .map((grp) => sliceGroupRange(mesh.geometry, grp.start, grp.count));
+      if (!parts.length) continue;
+      g = parts.length === 1 ? parts[0] : mergeGeometries(parts);
+    } else {
+      if (isInkDark(mats[0])) continue;
+      g = mesh.geometry.clone();
+    }
     ['skinIndex', 'skinWeight', 'color', 'uv', 'uv2'].forEach((a) => g.deleteAttribute(a));
     g = mergeVertices(g, 1e-4);
     g.computeVertexNormals();
