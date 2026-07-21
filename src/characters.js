@@ -78,10 +78,20 @@ function getOutlineMaterial() {
     outlineMaterial = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       uniforms: { thickness: { value: OUTLINE_THICKNESS }, oColor: { value: new THREE.Color(0x2a2018) } },
-      vertexShader: `uniform float thickness;
+      // 스키닝 청크 포함 — 헐이 SkinnedMesh로 렌더될 때(USE_SKINNING은 오브젝트 타입에서 자동
+      // 정의) 본 변형을 정점·법선에 그대로 적용한다. 팔 흔들기(wave) 때 외곽선 팔이 제자리에
+      // 남아 검은 팔처럼 어긋나던 문제의 근본 수정(실기기 피드백 2026-07-21). 일반 Mesh에서는
+      // 청크가 no-op으로 컴파일되므로 머티리얼 하나를 공유해도 안전하다.
+      vertexShader: `#include <skinning_pars_vertex>
+        uniform float thickness;
         void main() {
-          vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          vec3 n = normalize(normalMatrix * normal);
+          #include <skinbase_vertex>
+          #include <begin_vertex>
+          #include <beginnormal_vertex>
+          #include <skinnormal_vertex>
+          #include <skinning_vertex>
+          vec4 mv = modelViewMatrix * vec4(transformed, 1.0);
+          vec3 n = normalize(normalMatrix * objectNormal);
           mv.xyz += n * thickness * max(-mv.z, 0.0);
           gl_Position = projectionMatrix * mv;
         }`,
@@ -113,8 +123,9 @@ function sliceGroupRange(src, start, count) {
 }
 
 // 캐릭터의 각 메시에 외곽선 헐을 자식으로 붙인다. 지오메트리는 정점 용접 후 법선 재계산 —
-// FBX의 하드엣지 분할 정점 그대로면 외곽선이 모서리에서 갈라진다. 스킨 속성은 떼어내므로
-// 스켈레탈 1본 변형(wave 등)은 못 따라가지만 두께가 얇아 어긋남이 경미하다(시안 노트).
+// FBX의 하드엣지 분할 정점 그대로면 외곽선이 모서리에서 갈라진다. 스킨드 메시는 스킨 속성을
+// 보존하고 헐도 같은 스켈레톤에 바인딩한 SkinnedMesh로 만들어, 팔 흔들기 등 본 변형을 외곽선이
+// 그대로 따라간다(정적 헐이 wave 팔에서 어긋나던 문제의 근본 수정 — 실기기 피드백 2026-07-21).
 function addToonOutline(group) {
   const meshes = [];
   group.traverse((o) => { if (o.isMesh) meshes.push(o); });
@@ -132,10 +143,19 @@ function addToonOutline(group) {
       if (isInkDark(mats[0])) continue;
       g = mesh.geometry.clone();
     }
-    ['skinIndex', 'skinWeight', 'color', 'uv', 'uv2'].forEach((a) => g.deleteAttribute(a));
+    const drop = ['color', 'uv', 'uv2'];
+    if (!mesh.isSkinnedMesh) drop.push('skinIndex', 'skinWeight'); // 스킨드는 웨이트 보존(헐 스키닝용)
+    drop.forEach((a) => g.deleteAttribute(a));
     g = mergeVertices(g, 1e-4);
     g.computeVertexNormals();
-    const hull = new THREE.Mesh(g, getOutlineMaterial());
+    let hull;
+    if (mesh.isSkinnedMesh) {
+      hull = new THREE.SkinnedMesh(g, getOutlineMaterial());
+      hull.bindMode = mesh.bindMode;
+      hull.bind(mesh.skeleton, mesh.bindMatrix); // 부모와 같은 스켈레톤·바인드 행렬 공유
+    } else {
+      hull = new THREE.Mesh(g, getOutlineMaterial());
+    }
     hull.name = 'toonOutline'; // usdz 내보내기 등에서 외곽선 헐을 걸러낼 때 쓰는 식별자
     hull.frustumCulled = false;
     mesh.add(hull); // 부모 메시와 로컬 공간 동일 — 그룹 변환·모션을 그대로 따라간다
