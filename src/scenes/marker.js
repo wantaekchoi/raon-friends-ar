@@ -50,6 +50,11 @@ export async function initMarker({ containerEl, onTarget, onHoldChange }) {
   });
   const { renderer, scene, camera } = mindarThree;
 
+  // mind-ar는 camera를 scene 그래프에 넣지 않는다 — three.js는 scene에서 도달 가능한 오브젝트만
+  // 렌더하므로, 트래킹 로스트 시 camera.attach()로 카메라에 붙인 캐릭터가 화면에서 사라져 버린다
+  // (실기기 "대사 뜨면 캐릭터 소실" 버그의 근본 원인 — 대사를 읽으려 폰을 들면 카드를 놓친다).
+  // 카메라를 scene에 넣어 카메라 자식도 렌더 대상이 되게 한다.
+  scene.add(camera);
   scene.add(new THREE.AmbientLight(0xffffff, 1.2));
   const sun = new THREE.DirectionalLight(0xffffff, 1.6);
   sun.position.set(1, 3, 2);
@@ -78,11 +83,30 @@ export async function initMarker({ containerEl, onTarget, onHoldChange }) {
   await mindarThree.start();
 
   // 소환 확정 상태 — confirmSummon(key) 이후: 해당 캐릭터는 트래킹 로스트에도 사라지지 않고
-  // 카메라 앞에 유지되다가(Object3D.attach로 월드 변환 보존 재부모화) 카드 재인식 시 다시 붙는다.
-  // 나머지 캐릭터는 앵커에서 제거해 "다른 카드 인식" 혼선을 차단한다. (부착감 계획 Task A)
+  // 카메라 앞에 유지되다가 카드 재인식 시 다시 붙는다. 나머지 캐릭터는 앵커에서 제거해
+  // "다른 카드 인식" 혼선을 차단한다. (부착감 계획 Task A)
+  //
+  // ⚠️ 재부모화에 Object3D.attach(월드 변환 보존)를 쓰면 안 된다(실기기 "대사 뜨면 소실" 버그의
+  // 근본 원인, 2026-07-21 계측으로 확정): ①MindAR의 카드 공간은 마커 이미지 픽셀 단위라 월드
+  // 스케일이 ~720 — 그대로 카메라 공간에 가져오면 카메라가 캐릭터 내부에 파묻힌다 ②로스트 순간
+  // MindAR가 앵커 행렬을 무효화한 뒤라 decompose에서 스케일이 NaN이 되어 아예 렌더되지 않는다.
+  // 그래서 add()로 옮기고 각 공간의 목표 변환(카메라 공간 스케일 1 = 1.2유닛 캐릭터, 카드 공간
+  // 스케일 1 = 카드 단위)을 명시적으로 준 뒤 lerp로 수렴시킨다.
   let confirmedKey = null;
   let lastTracked = true; // 확정 시점엔 카드가 방금 인식된 상태 — 첫 프레임 스퓨리어스 알림 방지
-  const HOLD_POS = new THREE.Vector3(0, -0.35, -2.2); // 카메라 공간 유지 위치 (화면 하단 중앙쯤)
+  const UNIT_SCALE = new THREE.Vector3(1, 1, 1);
+
+  // 카메라 공간 유지(hold) 목표 — 고정 상수가 아니라 "마지막으로 추적되던 순간"의 거리·스케일을
+  // 그대로 쓴다. MindAR 월드는 마커 이미지 픽셀 단위(카드 거리 ~1300, 앵커 스케일 ~720)이고
+  // 카메라 near=10이라, 미터 감각의 상수(z=-2.2 등)는 near 안쪽에 들어가 통째로 클리핑된다
+  // (2026-07-21 계측). 마지막 추적값 기준이면 단위가 항상 맞고, 놓친 순간의 크기 그대로 화면에
+  // 남아 전환도 자연스럽다.
+  const lastWorldPos = new THREE.Vector3();
+  const lastWorldScale = new THREE.Vector3();
+  let holdDist = 1300; // 카드를 한 번도 추적 못 한 극단 케이스 대비 기본값(픽셀 단위)
+  let holdScale = 700;
+  const holdTargetPos = new THREE.Vector3();
+  const holdTargetScale = new THREE.Vector3();
 
   const clock = new THREE.Clock();
   const worldQuat = new THREE.Quaternion();
@@ -94,20 +118,40 @@ export async function initMarker({ containerEl, onTarget, onHoldChange }) {
 
       if (confirmedKey === key) {
         const tracked = anchor.group.visible;
+        if (tracked) {
+          // 유지 목표 갱신 — 유한값일 때만(로스트 직전 프레임은 행렬이 무효화돼 NaN이 나올 수 있다)
+          standGroup.getWorldPosition(lastWorldPos);
+          standGroup.getWorldScale(lastWorldScale);
+          if (Number.isFinite(lastWorldPos.z) && Number.isFinite(lastWorldScale.x) && lastWorldScale.x > 0) {
+            holdDist = lastWorldPos.length();
+            holdScale = lastWorldScale.x;
+          }
+        }
         if (tracked !== lastTracked) {
           lastTracked = tracked;
           onHoldChange?.(tracked);
-        }
-        if (tracked && standGroup.parent !== anchor.group) {
-          anchor.group.attach(standGroup); // 월드 변환 보존한 채 카드로 복귀 → 아래 lerp로 스냅
-        } else if (!tracked && standGroup.parent !== camera) {
-          camera.attach(standGroup); // 카드 놓침 → 화면(카메라 공간)에 유지
+          if (tracked) {
+            // 카드 재인식 → 카드 공간으로 복귀. 살짝 작게 시작해 카드 위로 "착" 자라며 스냅.
+            anchor.group.add(standGroup);
+            standGroup.position.set(0, 0, 0);
+            standGroup.scale.setScalar(0.6);
+          } else {
+            // 카드 놓침 → 마지막 추적 거리의 화면 하단에 유지 (아래에서 살짝 올라오는 연출)
+            camera.add(standGroup);
+            holdTargetPos.set(0, -holdDist * 0.32, -holdDist);
+            holdTargetScale.setScalar(holdScale * 0.85);
+            standGroup.position.set(0, -holdDist * 0.55, -holdDist);
+            standGroup.quaternion.copy(QUAT_UPRIGHT);
+            standGroup.scale.setScalar(holdScale * 0.5);
+          }
         }
         if (tracked) {
           standGroup.position.lerp(ZERO_VEC, 0.15); // 카드 원점으로 부드럽게 스냅
+          standGroup.scale.lerp(UNIT_SCALE, 0.15); // 카드 단위 스케일로
         } else {
-          standGroup.position.lerp(HOLD_POS, 0.08);
+          standGroup.position.lerp(holdTargetPos, 0.08);
           standGroup.quaternion.slerp(QUAT_UPRIGHT, 0.08); // 화면 유지 중엔 똑바로
+          standGroup.scale.lerp(holdTargetScale, 0.08);
         }
       }
 
