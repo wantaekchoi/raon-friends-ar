@@ -1,7 +1,6 @@
 import './style.css';
 import { CONFIG, SURVEY_QUESTIONS, GOOGLE_FORM } from './config.js';
 import { SCREENS } from './flow.js';
-import { startXR } from './scenes/webxr.js';
 import { showLine } from './ui/bubble.js';
 import { loadCharacter } from './characters.js';
 import { renderSurvey, submitSurvey } from './survey.js';
@@ -300,99 +299,8 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ===========================================================================
-// WebXR hit-test 바닥인식 모드 (Android Chrome, 베타) — agent/webxr-hittest
-// isXRSupported() 체크·#btn-xr 노출은 entry.js의 startOverlayFlow 안에서 처리한다.
-// 여기서는 진입/종료 전환만 담당 — 다른 씬 로직(자이로 오버레이·설문)은 건드리지 않는다.
-// ===========================================================================
-const btnXR = document.getElementById('btn-xr');
-const xrHint = document.getElementById('xr-hint');
-let xrHintTimer = null;
-
-function hideXRHint() {
-  clearTimeout(xrHintTimer);
-  xrHint.hidden = true;
-}
-
-btnXR.addEventListener('click', async () => {
-  const overlay = entry.overlay();
-  if (!overlay) return;
-  btnXR.disabled = true;
-
-  const xr = await startXR({
-    character: guide.loadedCharacter().model,
-    overlayRoot: document.getElementById('screen-ar'),
-    ...(store.get('characterHeight') !== undefined && { characterHeight: store.get('characterHeight') }),
-    // renderer.xr.setSession()은 실제 비동기 작업이라 await 뒤에서 모드를 전환하면 그 사이
-    // 리페인트가 끼어들어 XR 캔버스와 기존 2D 오버레이가 함께 보이는 이중 노출/깜빡임이
-    // 생길 수 있다 — scenes/webxr.js가 appendChild 이전(세션 end 리스너 등록 직후) 시점에
-    // 동기 호출하는 콜백으로 넘겨 그 타이밍에 맞춘다.
-    onSessionGranted: () => router.setMode('xr'),
-    // 바닥 인식(레티클)이 배치되면 힌트 타이머를 취소 — 트래킹 실패 안내(D)
-    onPlaced: hideXRHint,
-    onEnd: () => {
-      // 세션 종료(뒤로가기 등) → 기존 자이로 오버레이 씬으로 복귀.
-      // XR 씬에 캐릭터가 재소속되며 overlay 씬에서 빠졌을 수 있으니 다시 붙여준다.
-      router.setMode(null); // scenes/webxr.js의 cleanup() 직후 호출되는 시점과 동일한 순서
-      hideXRHint();
-      guide.setScene(asScene(overlay));
-      overlay.resume();
-      const restored = guide.loadedCharacter().model;
-      if (restored) {
-        overlay.setCharacter(restored);
-        overlay.playEntrance();
-      }
-      btnXR.hidden = false;
-      btnXR.disabled = false;
-    },
-  });
-
-  if (!xr) {
-    // 세션 시작 실패(권한 거부 등) — 오버레이 모드를 그대로 유지
-    btnXR.disabled = false;
-    return;
-  }
-
-  // router.setMode('xr')는 onSessionGranted 콜백으로 scenes/webxr.js 내부에서 이미
-  // (appendChild·setSession await 이전 시점에) 동기 호출됐다 — 여기서 다시 부르지 않는다.
-  overlay.pause();
-  guide.setScene(asScene(xr));
-  btnXR.hidden = true;
-  btnXR.disabled = false;
-
-  // 15초 안에 바닥(레티클)이 잡히지 않으면 친절한 안내 문구 노출 (리서치 보완 ①·②)
-  xrHint.textContent = CONFIG.trackingHints.xrReticle;
-  xrHintTimer = setTimeout(() => { xrHint.hidden = false; }, 15000);
-});
-
-// 현재 화자의 .usdz를 AR Quick Look으로 연다.
-//
-// ⚠️ 실기기 피드백 ④(2026-07-21): 임시 앵커를 만들어 프로그램적으로 click()하는 방식은 iOS에서
-// AR 모드 진입이 안 되고 "3D 모델 미리보기"(Object 뷰)로만 열렸다 — Safari의 AR Quick Look은
-// 사용자가 rel="ar" 앵커(<img>가 유일한 자식)를 **직접 탭**할 때 AR로 진입한다. 그래서 보이는
-// 버튼 자체를 그 규격의 실제 앵커로 구성한다(라벨은 SVG 이미지로 — 앵커 안에 텍스트 노드가
-// 있으면 AR 트리거가 깨진다는 Apple 문서 조건 준수). href는 화자가 바뀔 수 있으므로
-// pointerdown(내비게이션 확정 전, 제스처 컨텍스트 내)에 현재 화자로 갱신한다.
-{
-  const quicklook = document.getElementById('btn-quicklook');
-  const img = quicklook.querySelector('img');
-  const label = CONFIG.ui.btnQuickLook;
-  // 라벨 폭을 실측해 SVG를 딱 맞게 만든다 — 고정폭이면 좁은 화면에서 [다음] 버튼을 침범한다.
-  const FONT = `700 13px -apple-system, 'Apple SD Gothic Neo', sans-serif`;
-  const ctx = document.createElement('canvas').getContext('2d');
-  ctx.font = FONT;
-  const w = Math.ceil(ctx.measureText(label).width) + 4;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="18">`
-    + `<text x="${w / 2}" y="14" text-anchor="middle" font-family="-apple-system, 'Apple SD Gothic Neo', sans-serif"`
-    + ` font-size="13" font-weight="700" fill="#ffffff">${label}</text></svg>`;
-  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-  img.alt = label;
-  quicklook.addEventListener('pointerdown', () => {
-    sound.play('tap');
-    const key = guide.loadedCharacter().key || 'raong';
-    quicklook.href = `${import.meta.env.BASE_URL}usdz/${key}.usdz`;
-  });
-}
-// ===========================================================================
-
+// AR은 카드 소환으로 단일화(실기기 피드백 2026-07-21 "진짜 바닥에 세우기도 쳐내고 카드소환으로")
+// — WebXR 바닥인식·AR Quick Look 버튼과 배선은 제거했다. 바닥 손님맞이는 대형 인쇄 카드로:
+// 캐릭터 키가 카드 폭에 비례하므로(1.2×카드폭) 카드를 크게 뽑을수록 크게 선다
+// (docs/cards-floor-print.pdf). scenes/webxr.js·scripts/export-usdz.mjs는 재도입 대비 보존.
 router.show(guide.screen()); // 최초 로드 시 화면 상태 동기화(원본 syncScreen()의 마지막 호출)

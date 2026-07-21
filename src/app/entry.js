@@ -4,7 +4,6 @@
 // 하나의 재사용 유틸로 통합한 것이고, initEntry()는 그 세 진입 핸들러(오버레이/카드/Vision)의
 // 본문을 그대로 옮기기 위한 조립 함수다 — main.js는 여기서 반환하는 메서드만 호출한다.
 import { initOverlay } from '../scenes/overlay.js';
-import { isXRSupported } from '../scenes/webxr.js';
 import { asScene } from './scenes.js';
 import { scaledMs } from './timing.js';
 import { testParam } from './test-params.js';
@@ -25,20 +24,9 @@ export function createOnceGuard() {
   return guard;
 }
 
-// iOS Safari의 AR Quick Look 지원 감지 — rel="ar" 앵커를 지원하면 네이티브 ARKit 뷰어 사용 가능
-function supportsQuickLook() {
-  // relList.supports('ar')는 Chromium(데스크톱·Android)도 true를 반환한다(실측 2026-07-21) —
-  // 실제 AR Quick Look은 iOS(ARKit)에만 있으므로 플랫폼 판별을 함께 건다. iPadOS 13+는 UA가
-  // Mac으로 위장하므로 터치 지원 Mac도 iPad로 취급한다.
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const a = document.createElement('a');
-  return isIOS && !!(a.relList && a.relList.supports && a.relList.supports('ar'));
-}
-
 // config/store/guide/router/sound과, main.js가 소유한 비-AR 최후 폴백(onDirectSurvey)을 받아
 // 오버레이·카드·Vision 3개 진입 플로우를 구성한다. overlay()/markerSession()은 main.js의
-// goHome·btn-restart·WebXR 버튼이 원본처럼 "지금 붙어 있는 세션"을 참조하기 위한 접근자다
+// goHome·btn-restart가 원본처럼 "지금 붙어 있는 세션"을 참조하기 위한 접근자다
 // (guide.js의 scene()/loadedCharacter() 접근자 패턴과 동일).
 export function initEntry({ config, store, guide, router, sound, onDirectSurvey }) {
   let overlay = null;
@@ -72,7 +60,7 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
       guide.begin();
       // 쇼케이스 전환(실기기 피드백 2026-07-21): [만나러 가기]는 카메라·자이로 없이 예쁜 고정
       // 배경(기존 no-camera 그라데이션) 위에서 캐릭터를 보여준다 — 자이로 밀림·권한 팝업·사이즈
-      // 체감 문제를 함께 정리. 실제 바닥/카드 부착 AR은 카드 소환·Quick Look·WebXR가 담당한다.
+      // 체감 문제를 함께 정리. 실제 공간 부착 AR은 카드 소환(6DoF)이 담당한다.
       // 카메라는 매직미러(?camera=user)에서만 사용한다. fakeGyro(S7 헤드리스 자이로 검증,
       // localhost 전용)는 회전 경로를 결정적으로 태우기 위해 예외적으로 자이로를 켠다.
       const magicMirror = store.get('cameraFacing') === 'user';
@@ -97,15 +85,7 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
       await guide.ensureCharacter(guide.speaker());
       guide.renderGuide();
 
-      // WebXR hit-test 지원 기기(Android Chrome 등)에서만 "진짜 바닥에 소환" 버튼 노출.
-      // 미지원 기기(iOS 등)는 isXRSupported()가 false를 반환해 버튼이 계속 숨겨진 채 —
-      // 기존 자이로 오버레이 흐름과 완전히 동일하게 동작한다.
-      if (await isXRSupported()) {
-        document.getElementById('btn-xr').hidden = false;
-      } else if (supportsQuickLook()) {
-        // iOS: WebXR 대신 네이티브 AR Quick Look(진짜 6DoF 바닥 고정)으로 대칭을 맞춘다 (Task D)
-        document.getElementById('btn-quicklook').hidden = false;
-      }
+      // AR 진입 버튼은 카드 소환으로 단일화(2026-07-21) — WebXR·Quick Look 노출 게이팅 제거됨
     });
   }
 
@@ -134,8 +114,6 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
   // 성공과 동일한 후속 시퀀스(confirmTarget)를 짧은 지연 후 실행해 그 경로를 결정적으로 태운다.
   async function enterMarkerMode() {
     return guardMarker(async () => {
-      ensureGyroPermission(); // 제스처 컨텍스트에서 선요청 — 소환 후 오버레이 전환 대비 (await 안 함: 프롬프트와 병행 진행)
-
       const btnMarker = document.getElementById('btn-marker');
       const labelEl = document.getElementById('btn-marker-label');
       const labelBeforeLoad = labelEl.textContent;
@@ -251,7 +229,6 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
 
   async function enterVisionMode() {
     return guardVision(async () => {
-      ensureGyroPermission(); // 제스처 컨텍스트 선요청 — 인식 후 오버레이 전환 대비
 
       const btnVision = document.getElementById('btn-vision');
       const labelEl = document.getElementById('btn-vision-label');
