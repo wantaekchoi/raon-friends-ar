@@ -3,14 +3,29 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
 const BASE = import.meta.env.BASE_URL;
 
-// fbx는 텍스처 경로를 "제작 PC의 절대경로"로 구워두는 일이 흔하다(raoni.fbx =
-// `C:\Users\Administrator\raoni_texture-01.jpg`). FBXLoader는 그걸 모델 디렉토리 기준
-// 상대경로로 이어붙여 요청하므로 배포본에서 항상 404가 난다(파일명만 남겨도 그 이름으로는
-// 배포한 적이 없어 여전히 404다). 그래서 우리가 실제로 배포한 그 캐릭터의 텍스처로 돌린다 —
-// 요청이 사라지고, 어차피 아래 머티리얼 규칙이 입히려던 것과 같은 이미지다.
-export function rewriteBakedTexturePath(url, shippedTextureUrl) {
-  const isAbsoluteOsPath = /(^|\/)[A-Za-z]:[\\/]/.test(url) || url.includes('\\');
-  return isAbsoluteOsPath && shippedTextureUrl ? shippedTextureUrl : url;
+// fbx에는 제작 PC에서 구워진 텍스처 경로가 남아 있다(raoni.fbx의 `C:\Users\Administrator\
+// raoni_texture-01.jpg`, raona.fbx의 `\raoni_texture-01.jpg`). FBXLoader는 이 경로를 URL 수정자에
+// 넘기기 **전에** 파일명만 남기도록 정규화하므로(FBXLoader.js: `split('\\').pop()`), 백슬래시·드라이브
+// 문자를 검사하는 방식으로는 절대 걸러낼 수 없고 배포본에서 매번 404가 난다.
+//
+// 그렇다고 실존 파일로 돌리면 안 된다 — 아래 머티리얼 규칙이 "로드에 실패한 맵"을 보고 외부
+// 텍스처·순색(라오나 피부)으로 교체하는데, 요청이 성공해버리면 그 규칙이 꺼져 외형이 깨진다.
+// 그래서 배포 파일 목록(화이트리스트) 밖의 요청은 네트워크 대신 1×1 데이터 URI(센티널)로 보낸다:
+// 404도 안 나고, 규칙은 센티널을 '깨진 맵'으로 간주해 이전과 동일하게 동작한다.
+export const BROKEN_TEXTURE_SENTINEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+// public/models/에 실제로 배포된 파일 전부 — 여기 없는 이름을 fbx가 요청하면 센티널로 보낸다.
+// (파일을 추가·삭제하면 이 목록도 같이 갱신할 것.)
+const SHIPPED_MODEL_FILES = new Set([
+  'raong.fbx', 'raoni.fbx', 'raona.fbx',
+  'raong_face.jpg', 'raong_syringe.jpg', 'raong_face_tail_texture-01-01.jpg',
+  'raoni_tex.jpg', 'raona_tex.jpg',
+]);
+
+export function resolveModelAssetUrl(url, shippedFiles = SHIPPED_MODEL_FILES) {
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url; // 임베디드 텍스처는 그대로
+  const fileName = url.split(/[\\/]/).pop();
+  return shippedFiles.has(fileName) ? url : BROKEN_TEXTURE_SENTINEL;
 }
 
 // 캐릭터별 fbx·텍스처 매핑. pickTexture(name)은 메시/머티리얼 이름으로 어떤 텍스처를
@@ -71,12 +86,9 @@ export async function loadCharacter(key) {
   }
 
   try {
-    // fbx에 구워진 제작 PC 절대경로(예: raoni.fbx의 C:\Users\Administrator\raoni_texture-01.jpg)를
-    // FBXLoader가 그대로 요청해 매번 404를 낸다 — 아래 머티리얼 규칙이 결과적으로 외부 텍스처로
-    // 교체해 화면은 정상이지만, 요청 자체를 없애 프로덕션 콘솔 에러를 남기지 않는다.
+    // 배포 목록 밖 텍스처 요청(fbx에 구워진 제작 PC 경로 등)을 센티널로 보낸다 — 위 상수 주석 참고.
     const manager = new THREE.LoadingManager();
-    const shippedTexture = `${BASE}models/${Object.values(assets.textures)[0]}`;
-    manager.setURLModifier((url) => rewriteBakedTexturePath(url, shippedTexture));
+    manager.setURLModifier(resolveModelAssetUrl);
     const fbx = await new FBXLoader(manager).loadAsync(`${BASE}models/${assets.model}`);
 
     const texLoader = new THREE.TextureLoader();
@@ -109,7 +121,10 @@ export async function loadCharacter(key) {
 
         // fbx 내부에 맵 참조는 있으나 실제 이미지가 로드되지 않는(임베디드 깨짐) 경우에만
         // 외부 텍스처로 교체한다. 순색 머티리얼(맵 없음)은 건드리지 않는다.
-        const isBrokenMap = m.map && !m.map.image;
+        // 센티널(배포 목록 밖 요청의 대체 이미지)은 로드 성공 여부와 무관하게 항상 '깨진 맵'이다 —
+        // 데이터 URI는 traverse 시점에 이미 로드돼 있을 수 있어 !image 검사만으로는 놓친다.
+        const isBrokenMap = m.map
+          && (!m.map.image || m.map.image.src === BROKEN_TEXTURE_SENTINEL);
         if (isBrokenMap) {
           if (m === orig) m = m.clone();
           const matchName = `${m.name} ${child.name}`;
