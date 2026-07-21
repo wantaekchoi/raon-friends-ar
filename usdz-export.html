@@ -97,7 +97,36 @@
       log(`load ${key}`);
       const char = await loadCharacter(key);
       if (!char) throw new Error(`loadCharacter(${key}) 실패`);
-      const scene = buildExportScene(char); // 캐릭터는 1.2유닛(=1.2m) 정규화 — USDZ 단위는 미터라 실물 크기
+      const flat = buildExportScene(char);
+
+      // ⚠️ 변환은 프림 행렬이 아니라 **정점에 직접 굽는다**(실기기 피드백 2026-07-21 "AR에서
+      // 엎어져 있다"의 재발 방지). raw FBX 지오메트리는 Z-up이고 Y-up 보정 회전은 메시의
+      // matrixWorld(FBX 루트 rotX(-90°)×스케일)에 들어 있는데, USDZExporter의 행렬 취급에 기대면
+      // 계층 구성에 따라 결과가 달라져 Quick Look에서 눕는 사고가 났다. 정점을 월드 좌표(Y-up,
+      // 1.2m 키)로 변환해 두면 exporter가 행렬을 어떻게 다루든 결과가 결정적이다.
+      // buildExportScene이 각 mesh에 applyMatrix4(o.matrixWorld)를 해뒀으므로 그 행렬을 정점에
+      // 옮기고 행렬은 단위로 되돌린다. 마지막에 전체 bbox로 발바닥 y=0을 맞춘다.
+      const scene = new THREE.Scene();
+      const bakedMeshes = [];
+      while (flat.children.length) {
+        const mesh = flat.children[0];
+        mesh.updateMatrix();
+        mesh.geometry.applyMatrix4(mesh.matrix);
+        mesh.position.set(0, 0, 0);
+        mesh.quaternion.identity();
+        mesh.scale.set(1, 1, 1);
+        mesh.updateMatrix();
+        scene.add(mesh); // flat에서 자동 제거됨
+        bakedMeshes.push(mesh);
+      }
+      const box = new THREE.Box3();
+      for (const m of bakedMeshes) { m.geometry.computeBoundingBox(); box.union(m.geometry.boundingBox); }
+      const size = box.getSize(new THREE.Vector3());
+      const ground = new THREE.Matrix4().makeTranslation(0, -box.min.y, 0);
+      for (const m of bakedMeshes) m.geometry.applyMatrix4(ground);
+      // 결정적 검증 로그 — Y가 키 축(≈1.2)이고 바닥이 0인지 러너가 확인한다
+      log(`bbox ${key}: size=(${size.x.toFixed(2)},${size.y.toFixed(2)},${size.z.toFixed(2)}) height-axis=${size.y >= size.x && size.y >= size.z ? 'Y' : 'NOT-Y'}`);
+
       const exporter = new USDZExporter();
       const bytes = await exporter.parseAsync(scene, { maxTextureSize: 512 });
       log(`export ${key}: ${bytes.byteLength} bytes`);
