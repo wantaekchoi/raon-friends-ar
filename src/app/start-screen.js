@@ -7,7 +7,7 @@
 import { STORAGE_KEYS } from './storage-keys.js';
 import { readMockLabelParam } from '../vision/classifier.js';
 
-const SIZE_HEIGHTS = { life: 1.8, giant: 2.5 }; // 크기 칩 선택 → characterHeight 매핑 (store.js와 동일 값)
+const SIZE_HEIGHTS = { life: 1.8, giant: 3.2 }; // 크기 칩 선택 → characterHeight 매핑 (store.js와 동일 값)
 
 export function initStartScreen({ config, store, sound, onOverlay, onMarker, onVision, onDirectSurvey }) {
   // 효과음 (B팩) — muted 상태는 localStorage에 저장되며, 아이콘·클래스를 상태와 동기화한다.

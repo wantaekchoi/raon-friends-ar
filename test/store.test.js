@@ -6,7 +6,7 @@ describe('createStore', () => {
     const s = createStore('?kiosk=1&char=raoni&size=giant&camera=user');
     expect(s.get('kiosk')).toBe(true);
     expect(s.get('charParam')).toBe('raoni');
-    expect(s.get('characterHeight')).toBe(2.5);
+    expect(s.get('characterHeight')).toBe(3.2);
     expect(s.get('cameraFacing')).toBe('user');
     expect(s.get('lockedCharacter')).toBe(null);
   });
