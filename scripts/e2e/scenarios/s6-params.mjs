@@ -49,8 +49,11 @@ export async function run() {
 
   await withPage(async (page) => {
     await dismissOnboarding(page);
-    await page.click('#size-chips .size-chip:last-child');
-    const active = await page.evaluate(() => document.querySelector('.size-chip.selected')?.textContent ?? '');
-    if (!active.includes('자이언트')) throw new Error(`자이언트 칩 미적용: ${active}`);
+    // 크기 칩은 접혔다(쇼케이스 전환, 2026-07-21) — 시작 화면에 다시 나타나면 회귀다.
+    const chipsVisible = await page.evaluate(() => {
+      const el = document.getElementById('size-chips');
+      return !!el && !el.hidden && el.children.length > 0;
+    });
+    if (chipsVisible) throw new Error('크기 칩이 다시 노출됨(접힘 상태여야 함)');
   });
 }

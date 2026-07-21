@@ -126,11 +126,20 @@ export async function initOverlay({
   // true면 camera.quaternion 참조를 window.__overlayCameraQuat로 노출한다 — 헤드리스 E2E 전용
   // 디버그 훅(Task 11 S7). 기본 false: 프로덕션 경로에는 아무 영향 없다.
   exposeCameraQuat = false,
+  // 쇼케이스 모드(2026-07-21): 카메라·자이로 없이 고정 그라데이션 배경에서 캐릭터를 보여준다 —
+  // 기존 no-camera 폴백 경로(검증됨)를 정식 경로로 승격. AR은 카드·Quick Look·WebXR가 담당.
+  showcase = false,
 }) {
   // iOS 자이로 권한은 사용자 제스처 안에서만 요청 가능 — 소환/인식 등 비제스처 경로로 진입할 땐
   // main.js가 첫 탭 순간에 미리 받아둔 결과(gyroAllowedOpt)를 넘겨준다. 없으면 여기서 직접 요청.
-  const gyroAllowed = gyroAllowedOpt !== undefined ? gyroAllowedOpt : await requestGyroPermission();
-  await startCamera(videoEl, cameraFacing);
+  const gyroAllowed = showcase
+    ? false
+    : (gyroAllowedOpt !== undefined ? gyroAllowedOpt : await requestGyroPermission());
+  if (showcase) {
+    document.body.classList.add('no-camera'); // 그라데이션 배경 (기존 폴백 스타일 재사용)
+  } else {
+    await startCamera(videoEl, cameraFacing);
+  }
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, alpha: true, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));

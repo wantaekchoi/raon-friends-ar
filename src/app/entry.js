@@ -70,19 +70,19 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
       history.pushState({ ar: true }, ''); // 하드웨어 뒤로가기 → 홈 (사이트 이탈 방지)
       document.getElementById('btn-home').hidden = false;
       guide.begin();
-      const gyroOk = await ensureGyroPermission();
-      // 테스트 전용 파라미터(S7 헤드리스 자이로 검증) — README·운영자 시트에는 절대 노출하지 않는다.
-      // localhost/127.0.0.1 전용 게이트(test-params.js) — 공개 배포 URL에서 ?fakeGyro=1로
-      // 자이로 구독 자체를 죽이는(아무도 orientationProvider 콜백을 호출하지 않아 회전이 멈추는)
-      // 오작동을 막는다. 실기기 권한 여부와 무관하게 자이로 회전 경로 자체(orientationProvider →
-      // camera.quaternion)를 결정적으로 태우기 위해 gyroAllowed를 강제 true로 둔다.
+      // 쇼케이스 전환(실기기 피드백 2026-07-21): [만나러 가기]는 카메라·자이로 없이 예쁜 고정
+      // 배경(기존 no-camera 그라데이션) 위에서 캐릭터를 보여준다 — 자이로 밀림·권한 팝업·사이즈
+      // 체감 문제를 함께 정리. 실제 바닥/카드 부착 AR은 카드 소환·Quick Look·WebXR가 담당한다.
+      // 카메라는 매직미러(?camera=user)에서만 사용한다. fakeGyro(S7 헤드리스 자이로 검증,
+      // localhost 전용)는 회전 경로를 결정적으로 태우기 위해 예외적으로 자이로를 켠다.
+      const magicMirror = store.get('cameraFacing') === 'user';
       const fakeGyro = testParam('fakeGyro') === '1';
+      const gyroOk = magicMirror ? await ensureGyroPermission() : false;
       overlay = await initOverlay({
         videoEl: document.getElementById('camera-video'),
         canvasEl: document.getElementById('three-canvas'),
+        showcase: !magicMirror && !fakeGyro,
         gyroAllowed: fakeGyro ? true : gyroOk,
-        // E2 매직미러: size/camera 파라미터가 있을 때만 옵션을 전달한다 — overlay.js가 아직
-        // 해당 옵션을 지원하지 않는 상태에서도(A팩 작업 중) 여분의 키는 무시되어 안전하다.
         ...(store.get('characterHeight') !== undefined && { characterHeight: store.get('characterHeight') }),
         ...(store.get('cameraFacing') !== undefined && { cameraFacing: store.get('cameraFacing') }),
         ...(fakeGyro && {
@@ -93,26 +93,6 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
         }),
       });
       guide.setScene(asScene(overlay));
-      {
-        const hintEl = document.getElementById('xr-hint');
-        let hintText = null;
-        if (!gyroOk) {
-          hintText = config.ui.gyroOffHint;
-        } else {
-          // 자이로가 켜져 있어도 위치(6DoF)는 추적 불가 — 최초 1회만 행동 유도 (걸어가면 밀려나는 한계 안내)
-          try {
-            if (!localStorage.getItem(STORAGE_KEYS.overlayLookHintSeen)) {
-              hintText = config.ui.overlayLookHint;
-              localStorage.setItem(STORAGE_KEYS.overlayLookHintSeen, '1');
-            }
-          } catch { /* localStorage 불가 — 힌트 생략 */ }
-        }
-        if (hintText) {
-          hintEl.textContent = hintText;
-          hintEl.hidden = false;
-          setTimeout(() => { hintEl.hidden = true; }, 5000);
-        }
-      }
       // 최초 진입은 항상 라옹(환영 담당) — 단, ?char=로 화자가 고정된 경우 그 캐릭터
       await guide.ensureCharacter(guide.speaker());
       guide.renderGuide();

@@ -7,7 +7,6 @@
 import { STORAGE_KEYS } from './storage-keys.js';
 import { readMockLabelParam } from '../vision/classifier.js';
 
-const SIZE_HEIGHTS = { life: 1.8, giant: 3.2 }; // 크기 칩 선택 → characterHeight 매핑 (store.js와 동일 값)
 
 export function initStartScreen({ config, store, sound, onOverlay, onMarker, onVision, onDirectSurvey }) {
   // 효과음 (B팩) — muted 상태는 localStorage에 저장되며, 아이콘·클래스를 상태와 동기화한다.
@@ -56,33 +55,12 @@ export function initStartScreen({ config, store, sound, onOverlay, onMarker, onV
 
   // ===========================================================================
   // v1.1.0 — URL 파라미터를 몰라도 되는 인앱 메뉴 (모바일 UX)
-  // ①크기 칩: 방문객이 탭으로 캐릭터 크기 선택 (reload 없이 store.characterHeight에 반영)
-  // ②운영자 시트(⚙️): 키오스크·매직미러 토글 + 대시보드 — 적용 시 북마크 가능한 URL로 이동
-  // ===========================================================================
-  {
-    const chipWrap = document.getElementById('size-chips');
-    chipWrap.setAttribute('aria-label', config.ui.sizeChipsAria);
-    const sizes = [['base', undefined], ['life', SIZE_HEIGHTS.life], ['giant', SIZE_HEIGHTS.giant]];
-    const sizeParam = store.params.get('size');
-    const currentKey = sizeParam && SIZE_HEIGHTS[sizeParam] ? sizeParam : 'base';
-    sizes.forEach(([key, height]) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'size-chip' + (key === currentKey ? ' selected' : '');
-      b.setAttribute('role', 'radio');
-      b.setAttribute('aria-checked', key === currentKey ? 'true' : 'false');
-      b.textContent = config.ui.sizeChips[key];
-      b.addEventListener('click', () => {
-        store.set('characterHeight', height);
-        chipWrap.querySelectorAll('.size-chip').forEach((c) => {
-          c.classList.toggle('selected', c === b);
-          c.setAttribute('aria-checked', c === b ? 'true' : 'false');
-        });
-        sound.play('tap');
-      });
-      chipWrap.appendChild(b);
-    });
-  }
+  // 운영자 시트(⚙️): 키오스크·매직미러 토글 + 대시보드 — 적용 시 북마크 가능한 URL로 이동
+  //
+  // 크기 칩은 접었다(실기기 피드백 2026-07-21 "사이즈 어려우면 그냥 접어라") — 쇼케이스 전환으로
+  // [만나러 가기]가 고정 배경이 되면서 크기 옵션의 의미가 사라졌다. ?size=(life|giant) URL
+  // 파라미터는 매직미러 부스 세팅용으로만 유지한다.
+  document.getElementById('size-chips').hidden = true;
 
   {
     const fab = document.getElementById('btn-operator');
@@ -105,13 +83,10 @@ export function initStartScreen({ config, store, sound, onOverlay, onMarker, onV
     document.getElementById('op-close').addEventListener('click', () => { sheet.hidden = true; });
     document.getElementById('op-apply').addEventListener('click', () => {
       const url = new URL(location.href);
-      ['kiosk', 'camera', 'size'].forEach((k) => url.searchParams.delete(k));
+      ['kiosk', 'camera'].forEach((k) => url.searchParams.delete(k));
       if (document.getElementById('op-kiosk').checked) url.searchParams.set('kiosk', '1');
       if (document.getElementById('op-mirror').checked) url.searchParams.set('camera', 'user');
-      const sel = document.querySelector('.size-chip.selected');
-      const idx = [...document.querySelectorAll('.size-chip')].indexOf(sel);
-      if (idx === 1) url.searchParams.set('size', 'life');
-      if (idx === 2) url.searchParams.set('size', 'giant');
+      // size는 URL 전용 파라미터(크기 칩 제거됨) — 기존 값이 있으면 그대로 유지된다
       location.href = url.toString();
     });
   }
