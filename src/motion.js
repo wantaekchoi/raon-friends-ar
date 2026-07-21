@@ -53,6 +53,36 @@ function scoreOf(name) {
   return -1;
 }
 
+// 본이 얼굴/머리 메시의 정점에 실질적 웨이트(≥0.05)를 주는 정점 수를 센다.
+// 2023년 리깅 데이터에는 어깨 본(예: 라옹 arm007R)의 웨이트가 얼굴까지 번져 있어(657정점 실측,
+// 2026-07-21), 그 본으로 팔을 돌리면 얼굴이 딸려 늘어난다("얼굴도 늘어난다" 실기기 피드백).
+// 후보 본을 고를 때 이 값이 임계 이상이면 제외해 체인의 다음 본(라옹은 arm008R — 얼굴 영향 0)이
+// 뽑히게 한다.
+const FACE_INFLUENCE_LIMIT = 50;
+function countFaceInfluence(root, bone) {
+  let count = 0;
+  root.traverse((mesh) => {
+    if (!mesh.isSkinnedMesh || !/head|face/i.test(mesh.name)) return;
+    const idx = mesh.geometry.attributes.skinIndex;
+    const w = mesh.geometry.attributes.skinWeight;
+    if (!idx || !w) return;
+    // 객체 신원이 아니라 이름으로 찾는다 — fbx에 따라 스킨드메시마다 본 체인이 복제돼 있어
+    // (라옹: 같은 이름의 Bone이 메시 수만큼 존재) 선택된 본 객체가 이 메시의 skeleton.bones에는
+    // 없을 수 있다. 웨이트 의미는 이름 단위로 동일하다.
+    const boneIndex = mesh.skeleton.bones.findIndex((b) => b.name === bone.name);
+    if (boneIndex < 0) return;
+    for (let v = 0; v < idx.count; v += 1) {
+      for (let k = 0; k < 4; k += 1) {
+        if (idx.getComponent(v, k) === boneIndex && w.getComponent(v, k) >= 0.05) {
+          count += 1;
+          break;
+        }
+      }
+    }
+  });
+  return count;
+}
+
 function findMainArmBones(root) {
   const bones = [];
   root.traverse((child) => {
@@ -71,11 +101,17 @@ function findMainArmBones(root) {
 
   // score 내림차순 정렬. Array.sort는 안정 정렬이라 동점(예: 라옹의 armNNNR 체인 전부가
   // score=3)이면 순회 순서(부모가 자식보다 먼저 방문됨)가 유지돼 자연히 최상위 본이 뽑힌다.
+  // 단, 얼굴에 웨이트가 번진 본은 건너뛴다(위 countFaceInfluence 참조).
   const pick = (side) => {
     const list = candidates[side];
     if (!list.length) return null;
     list.sort((a, b) => b.score - a.score);
-    return list[0].bone;
+    for (const { bone } of list) {
+      const leak = countFaceInfluence(root, bone);
+      if (leak < FACE_INFLUENCE_LIMIT) return bone;
+      console.debug(`[motion] ${bone.name} 제외 — 얼굴 정점 ${leak}개에 웨이트 누출`);
+    }
+    return null;
   };
 
   return { armR: pick('R'), armL: pick('L') };
