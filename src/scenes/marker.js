@@ -55,10 +55,15 @@ export async function initMarker({ containerEl, onTarget, onHoldChange }) {
   // (실기기 "대사 뜨면 캐릭터 소실" 버그의 근본 원인 — 대사를 읽으려 폰을 들면 카드를 놓친다).
   // 카메라를 scene에 넣어 카메라 자식도 렌더 대상이 되게 한다.
   scene.add(camera);
-  scene.add(new THREE.AmbientLight(0xffffff, 1.2));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-  sun.position.set(1, 3, 2);
-  scene.add(sun);
+  // 스튜디오 조명(레트로 툰 시안 2026-07-21) — 평평한 Ambient(1.2)+Dir(1.6)이 톤 램프를 날려
+  // 입체감이 죽던 것을, 반구광(따뜻한 위/차가운 아래)+키+쿨 필로 교체. 5단 램프와 세트다.
+  scene.add(new THREE.HemisphereLight(0xfff2e0, 0x33405c, 0.85));
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
+  keyLight.position.set(1.4, 3, 2.2);
+  scene.add(keyLight);
+  const fillLight = new THREE.DirectionalLight(0xbcd4ff, 0.32);
+  fillLight.position.set(-2.2, 1.0, -1.0);
+  scene.add(fillLight);
 
   // 카드가 "세워져" 있으면(모니터에 띄우기 등) 카드 위쪽(Y)으로, "눕혀져" 있으면(바닥·테이블)
   // 카드 면에서 수직(Z)으로 일어서도록 자동 전환한다 — 바닥 카드에서 캐릭터가 누워 보이는

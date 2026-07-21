@@ -179,10 +179,15 @@ export async function initOverlay({
     (orientationProvider ?? ((cb) => window.addEventListener('deviceorientation', cb)))(handleOrientation);
   }
 
-  scene.add(new THREE.AmbientLight(0xffffff, 1.2));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-  sun.position.set(1, 3, 2);
-  scene.add(sun);
+  // 스튜디오 조명(레트로 툰 시안 2026-07-21) — 평평한 Ambient(1.2)+Dir(1.6)이 톤 램프를 날려
+  // 입체감이 죽던 것을, 반구광(따뜻한 위/차가운 아래)+키+쿨 필로 교체. 5단 램프와 세트다.
+  scene.add(new THREE.HemisphereLight(0xfff2e0, 0x33405c, 0.85));
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
+  keyLight.position.set(1.4, 3, 2.2);
+  scene.add(keyLight);
+  const fillLight = new THREE.DirectionalLight(0xbcd4ff, 0.32);
+  fillLight.position.set(-2.2, 1.0, -1.0);
+  scene.add(fillLight);
 
   const shadow = createGroundShadow(charPos);
   scene.add(shadow);

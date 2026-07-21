@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -55,12 +56,57 @@ const CHARACTER_ASSETS = {
 let toonGradient = null;
 function getToonGradient() {
   if (!toonGradient) {
-    toonGradient = new THREE.DataTexture(new Uint8Array([140, 200, 255]), 3, 1, THREE.RedFormat);
+    // 5단 하프램버트식 램프(120~255) — 3단(140,200,255)은 밝은 조명에서 어두운 단이 아예 안 떠
+    // 입체감이 죽었다("비닐 인형" 진단, 레트로 툰 시안 2026-07-21). 최저 단을 120으로 띄워
+    // TF2 하프램버트처럼 어두운 면도 죽지 않게 한다.
+    toonGradient = new THREE.DataTexture(new Uint8Array([120, 160, 195, 225, 255]), 5, 1, THREE.RedFormat);
     toonGradient.minFilter = THREE.NearestFilter;
     toonGradient.magFilter = THREE.NearestFilter;
     toonGradient.needsUpdate = true;
   }
   return toonGradient;
+}
+
+// 인버티드 헐 외곽선(젤다 바람의 지휘봉·무쌍류) — 법선 방향으로 부풀린 뒷면 메시가 잉크 라인이
+// 된다. 두께는 뷰 공간에서 거리(-mv.z)에 비례시켜 화면상 일정 굵기로 유지한다 — 오버레이(거리
+// ~2.7유닛)와 마커(픽셀 단위, 거리 ~1300)처럼 월드 스케일이 전혀 다른 씬에서 같은 룩이 나온다.
+// OUTLINE_THICKNESS는 시안 검증값 0.0075(거리 2.7 기준)를 거리 비례로 환산한 것.
+const OUTLINE_THICKNESS = 0.0028;
+let outlineMaterial = null;
+function getOutlineMaterial() {
+  if (!outlineMaterial) {
+    outlineMaterial = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      uniforms: { thickness: { value: OUTLINE_THICKNESS }, oColor: { value: new THREE.Color(0x2a2018) } },
+      vertexShader: `uniform float thickness;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vec3 n = normalize(normalMatrix * normal);
+          mv.xyz += n * thickness * max(-mv.z, 0.0);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `uniform vec3 oColor; void main() { gl_FragColor = vec4(oColor, 1.0); }`,
+    });
+  }
+  return outlineMaterial;
+}
+
+// 캐릭터의 각 메시에 외곽선 헐을 자식으로 붙인다. 지오메트리는 정점 용접 후 법선 재계산 —
+// FBX의 하드엣지 분할 정점 그대로면 외곽선이 모서리에서 갈라진다. 스킨 속성은 떼어내므로
+// 스켈레탈 1본 변형(wave 등)은 못 따라가지만 두께가 얇아 어긋남이 경미하다(시안 노트).
+function addToonOutline(group) {
+  const meshes = [];
+  group.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  for (const mesh of meshes) {
+    let g = mesh.geometry.clone();
+    ['skinIndex', 'skinWeight', 'color', 'uv', 'uv2'].forEach((a) => g.deleteAttribute(a));
+    g = mergeVertices(g, 1e-4);
+    g.computeVertexNormals();
+    const hull = new THREE.Mesh(g, getOutlineMaterial());
+    hull.name = 'toonOutline'; // usdz 내보내기 등에서 외곽선 헐을 걸러낼 때 쓰는 식별자
+    hull.frustumCulled = false;
+    mesh.add(hull); // 부모 메시와 로컬 공간 동일 — 그룹 변환·모션을 그대로 따라간다
+  }
 }
 
 // 기존 머티리얼의 색·텍스처·투명도만 승계해 무광 툰 머티리얼로 변환한다.
@@ -157,6 +203,8 @@ export async function loadCharacter(key) {
     fbx.scale.setScalar(scale);
     box.setFromObject(fbx);
     fbx.position.y -= box.min.y;
+
+    addToonOutline(fbx); // 잉크 라인 — 레트로 툰 룩(시안 승인 2026-07-21)
 
     const group = new THREE.Group();
     group.add(fbx);

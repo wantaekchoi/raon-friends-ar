@@ -72,6 +72,7 @@
       char.updateWorldMatrix(true, true);
       char.traverse((o) => {
         if (!o.isMesh) return;
+        if (o.name === 'toonOutline') return; // 인버티드 헐 외곽선은 웹 전용 — usdz엔 제외
         const mats = Array.isArray(o.material) ? o.material : [o.material];
         const groups = Array.isArray(o.material) && o.geometry.groups?.length ? o.geometry.groups : null;
         if (groups) {

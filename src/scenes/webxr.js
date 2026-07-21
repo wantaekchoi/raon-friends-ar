@@ -53,10 +53,15 @@ export async function startXR({
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbbb, 3));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-  sun.position.set(1, 3, 2);
-  scene.add(sun);
+  // 스튜디오 조명(레트로 툰 시안 2026-07-21) — 다른 씬과 동일 프리셋으로 통일. 이전의 강한
+  // 백색 반구광(3.0)은 톤 램프를 날려 입체감을 죽였다.
+  scene.add(new THREE.HemisphereLight(0xfff2e0, 0x33405c, 0.85));
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
+  keyLight.position.set(1.4, 3, 2.2);
+  scene.add(keyLight);
+  const fillLight = new THREE.DirectionalLight(0xbcd4ff, 0.32);
+  fillLight.position.set(-2.2, 1.0, -1.0);
+  scene.add(fillLight);
 
   const reticle = createReticle();
   scene.add(reticle);
