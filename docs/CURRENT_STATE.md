@@ -8,7 +8,7 @@
 
 - **설계서 확정** — [`docs/design.md`](design.md): 전체 개요·캐릭터 3종 역할·시스템 구성도·화면 설계(S1~S4)·설문 설계·3D 파이프라인·저장소 구조·개발 일정·리스크 대응까지 13개 섹션 확정.
 - **배포 파이프라인** — Vite 6 프로젝트 뼈대 + `.github/workflows/deploy.yml` (main push → `npm ci` → `npm test` → `npm run build` → GitHub Pages 자동 배포). `vite.config.js`에 `base: '/raon-friends-ar/'` 반영.
-- **S1 시작 화면** — 타이틀 + 캐릭터 3종 썸네일(`public/img/raong.png`, `raoni.png`, `raona.png`) + [바로 만나기]/[카드로 소환하기(준비 중, 비활성)] 버튼. `src/config.js`로 타이틀·멘트·캐릭터 정보 관리.
+- **S1 시작 화면** — 타이틀 + 캐릭터 3종 썸네일(`public/img/raong.png`, `raoni.png`, `raona.png`) + [바로 만나기]/[카드로 소환하기(준비 중, 비활성)] 버튼(초기 라벨 — 현재는 [✨ 라온 프렌즈 만나러 가기]/[카드로 소환하기]). `src/config.js`로 타이틀·멘트·캐릭터 정보 관리.
 - **화면 흐름 상태머신** — `src/flow.js`: `SCREENS`(START/GUIDE/SURVEY/DONE) + `createFlow()` (`start()`/`next()`/`finishSurvey()`/`reset()`).
 - **오버레이 AR 화면** — `src/scenes/overlay.js`: `getUserMedia` 후면 카메라 배경(거부 시 그라데이션 폴백) + three.js 투명 캔버스 오버레이 + 등장 바운스·대기 숨쉬기 모션.
 - **라옹 3D 모델 로드 + 렌더링 수정** — `src/characters.js`: FBXLoader로 `public/models/raong.fbx` 직접 로드, 로드 실패 시 임시 캡슐 캐릭터로 자동 폴백. 검정 렌더링 원인 2건 해결: ①vertexColors 요구하지만 정점색 데이터가 없는 메시는 머티리얼 clone 후 `vertexColors=false` ②`m.map`은 있지만 이미지가 깨진 임베디드 텍스처만 외부 텍스처로 교체. 레퍼런스 렌더와 일치 확인.
