@@ -184,11 +184,18 @@ body[data-screen="direct-survey"] #screen-survey-direct { display: block; }
 
 #screen-ar { position: fixed; inset: 0; }
 #bubble {
-  position: absolute; top: max(24px, env(safe-area-inset-top)); left: 16px; right: 16px;
+  /* 상단 버튼 줄(🔊·🏠 40px + 여백) 아래에서 시작 — 버튼과의 시각 겹침 제거 (실기기 피드백 ①) */
+  position: absolute; top: calc(max(14px, env(safe-area-inset-top)) + 50px); left: 16px; right: 16px;
   background: rgba(255, 255, 255, 0.94); border-radius: 20px; padding: 16px 18px;
   box-shadow: 0 10px 28px rgba(232, 89, 12, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(6px); z-index: 2;
+  /* 말풍선은 표시 전용(role=status) — 클릭을 통과시켜 어떤 버튼도 가리지 않는다.
+     (마커 플로우에서 🏠이 말풍선에 덮여 클릭 불가하던 실측 버그의 근본 수정) */
+  pointer-events: none;
 }
+/* 설문 화면의 말풍선은 한 줄 안내뿐 — 가이드용 3줄 최소높이를 풀어 설문 패널과의 겹침을 줄인다 */
+body[data-screen="survey"] #bubble-text,
+body[data-screen="done"] #bubble-text { min-height: auto; }
 /* F2 접근성: 원래 #e8590c는 배경 rgba(255,255,255,0.94)에서 3.58:1로 4.5:1 미달 — #a83c08로 보정 */
 #bubble-name { font-weight: 700; color: #a83c08; font-size: 0.85rem; letter-spacing: 0.01em; }
 #bubble-text { margin-top: 4px; font-size: 1rem; line-height: 1.55; min-height: 3em; color: #3a2b1f; }
@@ -322,6 +329,15 @@ body[data-mode="marker-flow"] #camera-video,
 body[data-mode="marker-flow"] #three-canvas,
 body[data-mode="marker-flow"] #btn-capture,
 body[data-mode="marker-flow"] #btn-home { display: none; }
+/* 마커 플로우에서 #screen-ar(가이드 UI 레이어)는 마커 화면 전체를 투명하게 덮는다 — #screen-marker가
+   fixed로 stacking context를 만들어 그 안의 🏠(z-index 5)이 z로는 못 올라오므로, 레이어 자체를
+   클릭 통과시키고 실제 인터랙션 요소만 되살린다. (실기기 ① — 🏠이 안 눌리던 실측 원인) */
+body[data-mode="marker-flow"] #screen-ar { pointer-events: none; }
+body[data-mode="marker-flow"] #screen-ar button,
+body[data-mode="marker-flow"] #screen-ar a,
+body[data-mode="marker-flow"] #screen-ar input,
+body[data-mode="marker-flow"] #screen-ar #survey-panel,
+body[data-mode="marker-flow"] #screen-ar #done-panel { pointer-events: auto; }
 
 /* --- Vision AI 인식 모드 (1단계: 구조 + mock, 2단계에서 MediaPipe 실 모델로 교체 예정) ---
    #screen-marker와 달리 router가 소유한 data-screen="vision" 하나만으로 충분하다 — 인식
