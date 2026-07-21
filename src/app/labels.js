@@ -36,7 +36,8 @@ export function bindLabels(config) {
   document.getElementById('btn-capture').textContent = config.ui.btnCapture;
   document.getElementById('btn-restart').textContent = config.ui.btnRestart;
   document.getElementById('btn-xr').textContent = config.ui.btnXR;
-  document.getElementById('btn-quicklook').textContent = config.ui.btnQuickLook;
+  // #btn-quicklook은 rel="ar" 앵커라 텍스트 노드를 넣으면 AR 트리거가 깨진다 —
+  // 라벨(SVG 이미지)·href는 main.js가 배선한다.
   document.getElementById('btn-next').textContent = config.ui.btnNext;
   document.querySelectorAll('.google-form-link').forEach((a) => { a.textContent = config.ui.googleFormLink; });
 }

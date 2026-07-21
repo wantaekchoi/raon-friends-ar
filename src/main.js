@@ -365,19 +365,34 @@ btnXR.addEventListener('click', async () => {
   xrHintTimer = setTimeout(() => { xrHint.hidden = false; }, 15000);
 });
 
-// 현재 화자의 .usdz를 AR Quick Look으로 연다. rel="ar" 앵커는 <img>가 유일한 자식이어야
-// 내비게이션 대신 Quick Look이 뜨므로, 보이는 버튼과 분리된 임시 앵커를 만들어 클릭한다.
-document.getElementById('btn-quicklook').addEventListener('click', () => {
-  sound.play('tap');
-  const key = guide.loadedCharacter().key || 'raong';
-  const a = document.createElement('a');
-  a.rel = 'ar';
-  a.href = `${import.meta.env.BASE_URL}usdz/${key}.usdz`;
-  a.appendChild(document.createElement('img'));
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-});
+// 현재 화자의 .usdz를 AR Quick Look으로 연다.
+//
+// ⚠️ 실기기 피드백 ④(2026-07-21): 임시 앵커를 만들어 프로그램적으로 click()하는 방식은 iOS에서
+// AR 모드 진입이 안 되고 "3D 모델 미리보기"(Object 뷰)로만 열렸다 — Safari의 AR Quick Look은
+// 사용자가 rel="ar" 앵커(<img>가 유일한 자식)를 **직접 탭**할 때 AR로 진입한다. 그래서 보이는
+// 버튼 자체를 그 규격의 실제 앵커로 구성한다(라벨은 SVG 이미지로 — 앵커 안에 텍스트 노드가
+// 있으면 AR 트리거가 깨진다는 Apple 문서 조건 준수). href는 화자가 바뀔 수 있으므로
+// pointerdown(내비게이션 확정 전, 제스처 컨텍스트 내)에 현재 화자로 갱신한다.
+{
+  const quicklook = document.getElementById('btn-quicklook');
+  const img = quicklook.querySelector('img');
+  const label = CONFIG.ui.btnQuickLook;
+  // 라벨 폭을 실측해 SVG를 딱 맞게 만든다 — 고정폭이면 좁은 화면에서 [다음] 버튼을 침범한다.
+  const FONT = `700 13px -apple-system, 'Apple SD Gothic Neo', sans-serif`;
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.font = FONT;
+  const w = Math.ceil(ctx.measureText(label).width) + 4;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="18">`
+    + `<text x="${w / 2}" y="14" text-anchor="middle" font-family="-apple-system, 'Apple SD Gothic Neo', sans-serif"`
+    + ` font-size="13" font-weight="700" fill="#ffffff">${label}</text></svg>`;
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  img.alt = label;
+  quicklook.addEventListener('pointerdown', () => {
+    sound.play('tap');
+    const key = guide.loadedCharacter().key || 'raong';
+    quicklook.href = `${import.meta.env.BASE_URL}usdz/${key}.usdz`;
+  });
+}
 // ===========================================================================
 
 router.show(guide.screen()); // 최초 로드 시 화면 상태 동기화(원본 syncScreen()의 마지막 호출)

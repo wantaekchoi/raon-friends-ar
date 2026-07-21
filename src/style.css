@@ -385,11 +385,16 @@ body[data-mode="marker-flow"] #screen-ar #done-panel { pointer-events: auto; }
 #btn-vision-fallback-survey { background: rgba(255, 255, 255, 0.16); color: #fff; }
 
 /* --- WebXR hit-test 바닥인식 모드 (Android, 베타) ---
-   #btn-quicklook(iOS AR Quick Look)은 같은 자리를 쓴다 — 두 버튼은 플랫폼별로 상호 배타 노출. */
+   #btn-quicklook(iOS AR Quick Look)은 같은 자리를 쓴다 — 두 버튼은 플랫폼별로 상호 배타 노출.
+   quicklook은 rel="ar" 앵커(+img 유일 자식)라 앵커 기본 스타일을 버튼 모양으로 덮는다. */
+/* :not([hidden]) 필수 — display 지정이 hidden 속성을 무력화하는 함정(done-panel에서 학습) */
+#btn-quicklook:not([hidden]) { text-decoration: none; display: inline-flex; align-items: center; }
+#btn-quicklook img { display: block; height: 15px; }
 #btn-quicklook,
 #btn-xr {
   position: absolute; right: max(14px, env(safe-area-inset-right));
-  bottom: max(24px, env(safe-area-inset-bottom)); z-index: 2;
+  /* [다음] 버튼(하단 중앙)과 같은 줄이면 좁은 화면(375px)에서 겹친다(실측) — 한 줄 위로 */
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + 58px); z-index: 2;
   padding: 9px 16px; border: none; border-radius: 999px;
   background: rgba(30, 20, 10, 0.55); color: #fff;
   font-size: 0.78rem; font-weight: 700; font-family: inherit;

@@ -27,8 +27,13 @@ export function createOnceGuard() {
 
 // iOS Safari의 AR Quick Look 지원 감지 — rel="ar" 앵커를 지원하면 네이티브 ARKit 뷰어 사용 가능
 function supportsQuickLook() {
+  // relList.supports('ar')는 Chromium(데스크톱·Android)도 true를 반환한다(실측 2026-07-21) —
+  // 실제 AR Quick Look은 iOS(ARKit)에만 있으므로 플랫폼 판별을 함께 건다. iPadOS 13+는 UA가
+  // Mac으로 위장하므로 터치 지원 Mac도 iPad로 취급한다.
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const a = document.createElement('a');
-  return a.relList && a.relList.supports && a.relList.supports('ar');
+  return isIOS && !!(a.relList && a.relList.supports && a.relList.supports('ar'));
 }
 
 // config/store/guide/router/sound과, main.js가 소유한 비-AR 최후 폴백(onDirectSurvey)을 받아
