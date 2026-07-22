@@ -2,16 +2,17 @@
 
 > 완료 상태는 [CURRENT_STATE.md](CURRENT_STATE.md) 참고. 여기는 다음에 할 일만.
 
-**최종 갱신**: 2026-07-20 (v1.4.0)
+**최종 갱신**: 2026-07-22 (쇼케이스+카드 단일화·영상·신청서 반영)
 
 ## 다음 작업
 
-1. **실기기 테스트** — 오버레이(자이로·둘러보기 힌트), 카드 하이브리드(소환 후 카드 부착·놓침 시 화면 유지·재인식 스냅), iPhone [진짜 바닥에 세우기](AR Quick Look — usdz 3종 외형·바닥 고정 확인), WebXR(Android), 효과음(iOS 무음 스위치 포함), 기념사진 공유 시트, `?size=giant`·`?camera=user` 매직미러, 온보딩/키오스크, 다국어(🌐 토글로 영어 전환 시 문구·레이아웃 확인), 구글 폼 실전송(테스트 제출 1건으로 스프레드시트 적재 확인). **(v1.4.0 셸 재작성 추가분)** 마커 실트래킹(fake 카메라 E2E가 대체할 수 없는 실물 카드 인식)·실자이로(overlay orientationProvider 기본 경로)·Quick Look·효과음 — 셸 리팩토링이 렌더링/UX를 건드리지 않았다는 전제(스펙 Non-goals)를 실기기에서 최종 확인.
-2. **시연 영상 촬영 + 신청서 제출** — 스토리보드(내부 보관 문서)대로 촬영(참여 컷 + 화면 캡처 + AI 활용 컷) → 업로드 → 신청서 확정·제출.
+1. **신청서 최종 제출 (마감 7/31 금)** — 폼 입력·영상 첨부까지 완료, "응답 수정 중" 상태에서 [제출] 버튼만 남음. 제출 전: 구버전 유튜브 2개(xPqG267Sc4U·IoOFPr713kE) 삭제, 새 링크 2개 시크릿 창 재생 확인, 배포 URL 동작 확인. 문항 7 문구는 팀 회의 결과에 따라 폼과 `../docs/private/submission.md` 동시 갱신.
+2. **실기기 최종 확인 (축소된 범위)** — 쇼케이스 전환·카드 단일화(2026-07-21) 이후 유효 항목만: 실물 카드 인식·소환·홀드, **바닥 대형 포스터(마커 주입판 재인쇄 후) 소환·기립·부착**(2026-07-22 fiducial — 반드시 마커 포함 신판으로 인쇄), 쇼케이스 등장·말풍선·쓰다듬기, 툰 외곽선(쩜눈·팔 흔들 때 추종), 설문 실전송→시트 적재, 효과음. 오버레이 자이로·Quick Look·WebXR·크기 칩 항목은 기능 제거로 폐기(`../device-test-checklist.md` 배너 참고).
 3. **별점 1~2점 "sad" 리액션 유지 여부 (사용자 결정 대기)** — 낮은 점수를 준 방문객에게 캐릭터가 시무룩해하는 리액션(`src/motion.js`의 `sad` 모션, 1.1초 뒤 `wave`로 회복)이 부담을 주거나 응답을 유도하는 것처럼 보일 수 있다는 우려가 있어 유지 여부 결정 필요.
-4. **Vision AI 실 모델 제작·배치** — MediaPipe Model Maker(Colab)로 raong/raoni/raona/unknown 4라벨 분류기 학습(카드·렌더·굿즈 사진 각 수십 장+네거티브) → `public/models/vision/raon-mascot-classifier.tflite` 배치만 하면 코드 변경 없이 실 인식 활성화. 실기기에서 mock(`?visionMock=raong`)으로 흐름 먼저 확인 가능.
-5. **E2E 후속 (감사 잔여, 낮은 우선순위)** — WebXR·Quick Look 버튼 노출 조건 검증(`supportsQuickLook` 모킹), S1/S5 catch의 실패 원인 구분(진단 품질), `--passWithNoTests` 제거, dev 모드 three 중복 경고(`optimizeDeps.exclude`).
-6. **main.js 추가 축소 후보 (v1.4.0 셸 재작성 후속)** — 현재 377줄, 애초 목표(≤150줄)는 미달(사유: `docs/superpowers/plans/2026-07-20-shell-rewrite.md` Task 10 기록 — 부트스트랩 배선 자체가 본질적으로 남는 코드). 더 줄이려면: `submitAndRetry`(설문 재시도 루프), `startDirectSurvey`(비AR 직행 설문), 키오스크 리셋 타이머를 각각 별도 모듈로 추출하는 안을 검토할 것.
+4. **Vision AI 실 모델 제작·배치** — 데이터셋·노트북 준비됨(`../vision-training/`, DEPLOY.md 절차 참고). Colab 학습 → `public/models/vision/raon-mascot-classifier.tflite` 배치만 하면 코드 변경 없이 [AI가 알아봐요] 자동 활성화.
+5. **예선(9/2)·결선(9/17) 발표 준비** — 5분 발표 슬라이드(`../docs/private/submission.md`의 아웃라인·심사기준 매핑 참고), 현장 시연용 실물 카드 인쇄(`docs/cards-print.pdf`, 바닥 대형판 `../print/poster-*.pdf`).
+6. **E2E 후속 (낮은 우선순위)** — S1/S5 catch의 실패 원인 구분(진단 품질), dev 모드 three 중복 경고(`optimizeDeps.exclude`).
+7. **main.js 추가 축소 후보 (v1.4.0 셸 재작성 후속)** — 현재 377줄, 애초 목표(≤150줄)는 미달(사유: `docs/superpowers/plans/2026-07-20-shell-rewrite.md` Task 10 기록 — 부트스트랩 배선 자체가 본질적으로 남는 코드). 더 줄이려면: `submitAndRetry`(설문 재시도 루프), `startDirectSurvey`(비AR 직행 설문), 키오스크 리셋 타이머를 각각 별도 모듈로 추출하는 안을 검토할 것.
 
 ## 낮은 우선순위 (동작에 지장 없음)
 

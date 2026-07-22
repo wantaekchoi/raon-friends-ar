@@ -10,9 +10,10 @@
 import { spawn } from 'child_process';
 import { mkdirSync, writeFileSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer-core';
 
-const ROOT = resolve(new URL('..', import.meta.url).pathname);
+const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url))); // .pathname은 비ASCII 경로에서 %인코딩 문제
 const OUT_DIR = join(ROOT, 'public', 'usdz');
 const KEYS = ['raong', 'raoni', 'raona'];
 const CHROME = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';

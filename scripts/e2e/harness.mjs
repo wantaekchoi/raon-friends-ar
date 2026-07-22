@@ -3,9 +3,10 @@
 import { spawn } from 'child_process';
 import { mkdirSync } from 'fs';
 import { join, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer-core';
 
-const ROOT = resolve(new URL('../..', import.meta.url).pathname);
+const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url))); // .pathname은 비ASCII 경로를 %인코딩된 채 반환해 한글 경로에서 깨진다
 const CHROME = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 export const BASE_URL = 'http://localhost:4173/raon-friends-ar/';
 const SHOT_DIR = join(ROOT, 'scripts', 'e2e', '.screenshots');

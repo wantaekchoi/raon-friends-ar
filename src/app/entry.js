@@ -161,6 +161,7 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
 
       function fallbackToOverlay() {
         clearTimeout(fallbackTimer);
+        posterWatch?.stop();
         markerSession?.stop();
         // #screen-marker를 별도로 숨기지 않는다 — btn-overlay 클릭이 동기적으로 startOverlayFlow의
         // guide.begin()(flow.start()+syncScreen 내부 호출)까지 실행해(첫 await 이전) data-screen이
@@ -171,12 +172,20 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
 
       fallbackBtn.addEventListener('click', fallbackToOverlay, { once: true });
 
+      // 포스터(ArUco) 감시 세션 — initMarker 성공 후 시작된다. NFT confirm의 거부권 판단에
+      // confirmTarget보다 먼저 선언돼야 한다(클로저 참조).
+      let posterWatch = null;
+
       // 카드 인식 성공 이후 공통 시퀀스 — 실제 인식(아래 onTarget)과 헤드리스 E2E용 markerMock이
       // 동일한 함수를 호출한다(복붙 금지, S8 브리프 요구사항). 소환 힌트 문구 → 효과음 →
       // startMarkerFlow(key) 순서는 원본 onTarget 그대로다.
       function confirmTarget(key) {
         if (found) return; // 첫 인식 카드가 소환 확정 — 이후 다른 카드 인식은 무시
+        // 거부권: 화면에 ArUco 포스터가 있는 동안 NFT 매칭은 신뢰 불가(사선 교차 오인식 계측,
+        // debug-marker 프로브 2026-07-22) — 포스터 확정(confirmPoster)에 양보한다.
+        if (posterWatch?.recentlyDetected()) return;
         found = true;
+        posterWatch?.stop(); // 손 카드로 소환 확정 — 포스터 감시는 더 필요 없다
         clearTimeout(fallbackTimer);
         fallbackBtn.hidden = true;
         // 소환 확정: 마커 세션을 유지한 채 진행한다 — 카드가 보이면 캐릭터가 카드에 딱 붙고(6DoF),
@@ -188,6 +197,49 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
         hint.textContent = config.ui.markerSummoned.replace('{name}', config.characters[key].name);
         sound.play('twinkle');
         markerSession?.confirmSummon(key);
+        setTimeout(() => {
+          hint.hidden = true;
+          startMarkerFlow(key);
+        }, 1600);
+      }
+
+      // 포스터(ArUco) 소환 확정 — NFT confirmTarget과 같은 사용자 시퀀스(힌트→효과음→1600ms 후
+      // 가이드 시작)를 밟되, 씬은 MindAR 대신 poster.js(fiducial 6DoF)로 교체한다. 포스터 씬은
+      // markerSession 슬롯에 그대로 들어가(인터페이스 .stop() 동일) 홈/리셋 정리가 기존 경로로 동작.
+      function confirmPoster(key) {
+        if (found) return;
+        found = true;
+        clearTimeout(fallbackTimer);
+        fallbackBtn.hidden = true;
+        markerSession?.stop(); // MindAR 정지 (카메라 반납 — 포스터 씬이 새로 연다)
+        markerSession = null;
+        hint.hidden = false;
+        hint.textContent = config.ui.markerSummoned.replace('{name}', config.characters[key].name);
+        sound.play('twinkle');
+        import('../scenes/poster.js')
+          .then(({ initPoster }) => initPoster({
+            containerEl: document.getElementById('marker-container'),
+            characterKey: key,
+            onTrackChange(tracked) {
+              if (tracked) {
+                hint.hidden = true;
+              } else {
+                hint.textContent = config.ui.markerLostHint;
+                hint.hidden = false;
+                setTimeout(() => { hint.hidden = true; }, 3000);
+              }
+            },
+          }))
+          .then((session) => {
+            markerSession = {
+              stop() {
+                delete document.body.dataset.posterMode;
+                session.stop();
+              },
+            };
+            document.body.dataset.posterMode = '1'; // E2E 단언·CSS 여지
+          })
+          .catch((err) => console.warn('포스터 씬 시작 실패 — 화면 흐름은 계속 진행', err));
         setTimeout(() => {
           hint.hidden = true;
           startMarkerFlow(key);
@@ -220,6 +272,19 @@ export function initEntry({ config, store, guide, router, sound, onDirectSurvey 
       } catch (err) {
         console.warn('마커 모드 초기화 실패 — 오버레이로 폴백', err);
         fallbackToOverlay();
+        return;
+      }
+
+      // 포스터 감시 시작 — MindAR가 카메라를 켠 뒤에만 의미가 있다. 실패해도 손 카드(NFT)
+      // 경로는 그대로 동작해야 하므로 조용히 무시한다.
+      try {
+        const { createPosterWatch } = await import('../scenes/poster-watch.js');
+        posterWatch = createPosterWatch({
+          containerEl: document.getElementById('marker-container'),
+          onConfirm: confirmPoster,
+        });
+      } catch (err) {
+        console.warn('포스터 감시 시작 실패 — 손 카드 인식만 사용', err);
       }
     });
   }
