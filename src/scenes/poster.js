@@ -15,7 +15,7 @@ const { AR } = arucoPkg;
 
 const DETECT_W = 640; // 검출용 다운샘플 폭 — 성능/정확도 균형
 const POSTER_ASPECT = 297 / 210; // A계열 세로 (floor-card SVG와 동일)
-const CHARACTER_HEIGHT = 1.3; // 포스터 폭=1 단위 — "카드가 클수록 캐릭터도 크게"
+const CHARACTER_HEIGHT = 2.2; // 포스터 폭=1 단위 — 포스터를 다 덮을 정도로 크게 (실기기 피드백 2026-07-22)
 const NORMALIZED_CHARACTER_HEIGHT = 1.2; // loadCharacter 정규화 키 (characters.js)
 
 async function startCamera(videoEl) {
